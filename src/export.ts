@@ -29,11 +29,11 @@ export async function prepareExport(name:string,bytes:number,browserDownload=fal
   return {name,bytes,url,cleanup:async()=>{URL.revokeObjectURL(url);await cleanup()}};
  }};
 }
-export async function generate(engine:Engine,sink:Sink,pixels:ImageData,tone:Tone,config:Geometry,count:number,signal:AbortSignal,progress:(bytes:number)=>void){
- const raw=pixels.data.buffer;
+export async function generate(engine:Engine,sink:Sink,pixels:ImageData|null,tone:Tone,config:Geometry,count:number,signal:AbortSignal,progress:(bytes:number)=>void,pattern?:'bands'|'line'){
  try{
   if(signal.aborted)throw Error('Export cancelled');
-  await engine.request('start',{pixels:raw,size:pixels.width,tone,config:{...config,outputSectors:count}},[raw]);
+  if(pattern)await engine.request('calibration-start',{config:{...config,outputSectors:count},pattern});
+  else {if(!pixels)throw Error('Missing artwork');const raw=pixels.data.buffer;await engine.request('start',{pixels:raw,size:pixels.width,tone,config:{...config,outputSectors:count}},[raw]);}
   for(let start=0;start<count;start+=256){
    if(signal.aborted)throw Error('Export cancelled');
    const chunk=await engine.request<Uint8Array>('chunk',{start,count:Math.min(256,count-start)});

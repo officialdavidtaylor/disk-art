@@ -16,6 +16,14 @@ Measured presets were contributed upstream by H4CNPE, Disappear9, DBPolp,
 EternalEve, bczhc and other DiscImageStudio contributors. They are not universal
 calibrations for every drive or every disc with the same marketing name.
 
+Calibration address-band intervals and the continuous phase-difference method
+are informed by the same reference commit's docs/CALIBRATION.md and
+src/DiscImageStudio.Core/Calibration/CalibrationWideBandPattern.cs,
+CalibrationCrossPrediction.cs, CalibrationCrossFitter.cs and CalibrationFitter.cs.
+The Go fitter, browser photo measurement workflow and persistence code are
+implemented for this application. The Maxell DVD+R preset is nominal, not an
+upstream measured calibration.
+
 This application is distributed under GPL-3.0-or-later. See LICENSE.
 Corresponding source: https://github.com/officialdavidtaylor/disk-art
 

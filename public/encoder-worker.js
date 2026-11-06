@@ -29,6 +29,8 @@ onmessage=({data})=>{
    if(data.type==='load')result=true;
    else if(data.type==='preview')result=dvdPreview(new Uint8Array(data.pixels),data.size,JSON.stringify(data.tone));
    else if(data.type==='start')result=dvdStart(new Uint8Array(data.pixels),data.size,JSON.stringify(data.tone),JSON.stringify(data.config));
+   else if(data.type==='calibration-start')result=dvdCalibrationStart(JSON.stringify(data.config),data.pattern);
+   else if(data.type==='calibrate'){result=dvdCalibrate(JSON.stringify(data.request));if(typeof result==='string')result=JSON.parse(result)}
    else if(data.type==='chunk')result=dvdChunk(data.start,data.count);
    else if(data.type==='release')result=dvdRelease();
    else throw Error('Unknown encoder command');

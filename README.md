@@ -33,7 +33,23 @@ npm run preview
 
 Chrome/Edge can stream directly to a selected output file. Other browsers with the necessary Origin Private File System APIs spool to temporary local storage, then expose a download. The spool is cleaned on replacement or normal teardown; after an interrupted tab, the next export in that tab removes its prior spool. Browser storage and a second downloaded copy may require roughly twice the ISO size. Generation is cancellable and runs in a Web Worker with backpressure: one 512 KiB chunk is written before the next is requested. No 4.7 GB array or in-memory Blob is assembled.
 
-The Go binary is about 4.45 MB uncompressed with the verified toolchain. A progress bar reports the actual downloaded bytes; SHA-256 verification detects incomplete or stale downloads. The app uses no remote fonts, image services, telemetry, or backend encoder.
+The Go binary is about 4.51 MB uncompressed with the verified toolchain. A progress bar reports the actual downloaded bytes; SHA-256 verification detects incomplete or stale downloads. The app uses no remote fonts, image services, telemetry, or backend encoder.
+
+## Calibrate a burner / media combination
+
+Open **Calibrate your discs**. Maxell DVD+R is the default nominal starting point (24–58 mm, 2,295,104 sectors, 133.3 nm channel bits); it is **not a measured Maxell preset**. Confirm the blank's sector capacity in your burning application. Keep the burner, media batch and write speed consistent.
+
+1. Create a **broad rings** burn record, enter the burner and speed, save its JSON, and generate the full 4.70 GB calibration ISO. Burn/finalize a new blank as a disc image. Label the disc with the record ID. A short inner-ring export cannot calibrate the complete recording area.
+2. Photograph the recording side straight on, with the entire physical 120 mm rim visible. Import the photo and mark its left, right, top and bottom extremes. The UI checks circularity and centre consistency; it does not correct perspective or lens distortion. Zoom and scroll for accurate points. Alternatively measure radii directly with suitable measuring equipment.
+3. Mark the six dark-band edges, inside outward along one radial direction, or enter their radii in millimetres. Fit the recording area, name the profile, then **Save & apply profile**. This is a coarse radius estimate, not a finished spiral calibration.
+4. Create a new **single line** record using **current artwork geometry / applied profile**, save it, and burn a new blank. Trace the middle of the same continuous line from inside outward: at least 12 points, at least 65% radial coverage, and less than a quarter turn between adjacent points. A manual radius/angle entry option is available. Clockwise angles are measured from the right; arbitrary photo rotation is fitted away.
+5. Fit and inspect the green photo overlay and residuals. Optional variable-pitch fitting requires at least 24 points over 85% of the recording width. Save/apply the result and make another line burn to verify it is straight before using the profile for artwork. If the line is too tangled to trace, improve the coarse measurements first.
+
+Profiles and up to 40 burn records persist in local browser storage. Export/import JSON for backups or another browser. A burn record freezes its pattern and geometry; switching current profiles never alters an existing record. Measurements are retained, while photos themselves are not persisted. Applying a profile selects it in the artwork disc menu. After a reload, select the saved profile again. Replacing a photo resets measurements, avoiding accidental mixing of image scales.
+
+The Go encoder renders calibration analytically, without raster resampling or dithering. The bands occupy logical-sector fractions `[.035,.170)`, `[.305,.510)`, `[.705,.955)`, with edges rounded upward to whole sectors. Coarse fitting regresses squared radius against these exact fractions under a constant-pitch approximation and clears prior pitch corrections. The fine pattern is a single 1.2 mm radial line. A bounded damped least-squares fit minimizes the **unwrapped** phase difference between the actual and frozen generation spirals. It fits inner/outer radii, optional cubic pitch, and photo rotation; channel-bit length stays fixed. Reported fine residuals are local perpendicular distances, not absolute physical accuracy. Radius refinement is limited to ±0.3 mm, and individual pitch coefficients to ±0.005.
+
+Skipped complete turns, incorrect centring, photo distortion, and overfitting can still produce misleading fits with small residuals. The workflow requires physical verification on a fresh blank. It has been tested with synthetic geometry and browser exports; it has not yet been validated with a Maxell hardware burn.
 
 ## What the disc contains
 
@@ -62,7 +78,7 @@ Geometry supports the upstream cubic radial pitch model, integrated by Simpson q
 
 ## Verification
 
-`npm test` runs Go tests for scrambling, physical offsets, geometry, chunk determinism, tone coverage, filesystem extents and invalid input, followed by a real WebAssembly export of a 67 MB test image.
+`npm test` runs Go tests for scrambling, physical offsets, geometry, chunk determinism, tone coverage, filesystem extents and invalid input, followed by calibration fitting/encoding tests, browser-state schema and photo-scale tests, and a real WebAssembly export of a 67 MB test image. Synthetic fine fits recover radii and cubic pitch and are checked at held-out radii.
 
 ```sh
 # Stream all 4,700,372,992 bytes through the WASM encoder into a hash;

@@ -8,6 +8,9 @@ import type {Placement} from './canvas';
 import {generate,prepareExport} from './export';
 import type {ExportResult} from './export';
 import presets from './presets.json';
+import Calibration from './CalibrationPanel';
+import {loadCalibration,storageKey,validGeometry as geometryIsValid} from './calibration';
+import type {BurnRecord,CalibrationStore,Profile} from './calibration';
 
 const initialPlacement:Placement={x:0,y:0,scale:1,rotation:0,mirror:false};
 const initialTone:Tone={brightness:0,contrast:1,gamma:1,threshold:.5,dither:true,invert:false};
@@ -23,11 +26,15 @@ export default function App(){
  const [placement,setPlacement]=useState<Placement>(initialPlacement);
  const [tone,setTone]=useState<Tone>(initialTone);
  const [preset,setPreset]=useState(presets[0].id);
+ const [view,setView]=useState<'artwork'|'calibration'>('artwork');
+ const [saved]=useState(()=>{try{return {data:loadCalibration(),error:''}}catch(e){return {data:{records:[],profiles:[]} as CalibrationStore,error:(e as Error).message}}});
+ const [calibration,setCalibration]=useState<CalibrationStore>(saved.data);
+ const [exportBytes,setExportBytes]=useState(0);
  const [geometry,setGeometry]=useState<Geometry>(presets[0].geometry);
  const [physical,setPhysical]=useState(true);
  const [grid,setGrid]=useState(false);
  const [load,setLoad]=useState<LoadState>({ready:false,received:0,total:0});
- const [error,setError]=useState('');
+ const [error,setError]=useState(saved.error);
  const [busy,setBusy]=useState(false);
  const [completed,setCompleted]=useState(0);
  const [started,setStarted]=useState(0);
@@ -47,7 +54,9 @@ export default function App(){
  const resultRef=useRef<ExportResult|null>(null);
  const drag=useRef<{x:number;y:number;origin:Placement;size:number}|null>(null);
  const count=proof?32768:geometry.sectors;
- const total=count*2048;
+ const total=busy?exportBytes:count*2048;
+ useEffect(()=>{if(calibration===saved.data)return;try{localStorage.setItem(storageKey,JSON.stringify(calibration))}catch{setError('Could not save calibration in this browser. Export a JSON backup before leaving.')}},[calibration,saved]);
+ function applyProfile(profile:Profile){setGeometry({...profile.geometry});setPreset('profile:'+profile.id)}
 
  useEffect(()=>{
   let disposed=false;
@@ -93,36 +102,40 @@ export default function App(){
   const d=drag.current;if(!d)return;
   changePlacement({x:Math.max(-100,Math.min(100,d.origin.x+(e.clientX-d.x)/d.size*100)),y:Math.max(-100,Math.min(100,d.origin.y+(e.clientY-d.y)/d.size*100))});
  }
- async function exportISO(){
-  if(busy||!load.ready)return;
+ async function exportISO(record?:BurnRecord):Promise<boolean>{
+  if(busy||!load.ready)return false;
+  const exportCount=record?record.geometry.sectors:count;const exportGeometry=record?record.geometry:geometry;const bytes=exportCount*2048;setExportBytes(bytes);
   setError('');setCompleted(0);setBusy(true);setStarted(Date.now());setPhase(browserDownload?'Preparing local download…':'Choose a save location…');
   const controller=new AbortController();abort.current=controller;
   let sink:Awaited<ReturnType<typeof prepareExport>>|undefined;
   let e:Engine|undefined;
   try{
-   const filename=(source.name.replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').toLowerCase()||'dvd-art')+(proof?'-inner-ring-test':'')+'.iso';
-   sink=await prepareExport(filename,total,browserDownload);
+   const filename=record?`calibration-${record.id}-${record.pattern}.iso`:(source.name.replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').toLowerCase()||'dvd-art')+(proof?'-inner-ring-test':'')+'.iso';
+   sink=await prepareExport(filename,bytes,browserDownload);
    setPhase('Preparing artwork…');
-   if(controller.signal.aborted){await sink.abort();return}
+   if(controller.signal.aborted){await sink.abort();return false}
    await resultRef.current?.cleanup?.();setResult(null);resultRef.current=null;
    e=new Engine(()=>{});exportEngine.current=e;
-   const pixels=compose(source.image,source.width,source.height,placement,size);
-   const saved=await generate(e,sink,pixels,tone,geometry,count,controller.signal,(bytes)=>{setPhase('Encoding your disc');setCompleted(bytes)});
-   resultRef.current=saved;setResult(saved);
-  }catch(e){
+   const pixels=record?null:compose(source.image,source.width,source.height,placement,size);
+   const saved=await generate(e,sink,pixels,tone,exportGeometry,exportCount,controller.signal,(bytes)=>{setPhase(record?'Encoding calibration disc':'Encoding your disc');setCompleted(bytes)},record?.pattern);
+   resultRef.current=saved;setResult(saved);return true;
+  }catch(error){
    if(!e)await sink?.abort().catch(()=>{});
-   if(!controller.signal.aborted&&(e as Error).name!=='AbortError')setError((e as Error).message);
+   if(!controller.signal.aborted&&(error as Error).name!=='AbortError')setError((error as Error).message);
+   return false;
   }finally{e?.close();exportEngine.current=null;setBusy(false);abort.current=null}
  }
  const percent=Math.min(100,completed/total*100);
  const elapsed=(Date.now()-started)/1000;
  const remaining=completed>0?Math.max(0,elapsed*(total-completed)/completed):0;
- const validGeometry=Number.isFinite(geometry.sectors)&&geometry.sectors>=256&&geometry.sectors<=2298496&&geometry.sectors%16===0&&geometry.inner>=20&&geometry.outer<=59&&geometry.outer>geometry.inner&&geometry.bitLength>=120&&geometry.bitLength<=150;
+ const validGeometry=geometryIsValid(geometry);
  return <div className="app">
   <header className="header"><a className="brand" href="/"><Disc3 size={29} strokeWidth={1.6}/><span>dvd<span className="brand-light">art</span><span className="brand-dot">.</span></span></a><div className="header-caption">A NEW LIFE FOR BLANK DISCS</div><div className="header-right"><span className="private-label"><span className="status-dot"/>Made locally. Stays local.</span><button className="text-button" onClick={()=>setHelp(true)}>How it works <ArrowUpRight size={15}/></button></div></header>
   <main>
    <div className="intro"><div><div className="eyebrow">THE DISC IS YOUR CANVAS</div><h1>Give your image a spin.</h1><p>Turn an ordinary DVD into something worth keeping.</p></div><div className="version-badge"><span className="small-disc"/>DVD STUDIO <span className="version">01</span></div></div>
-   <div className="studio">
+   <nav className="studio-tabs" aria-label="Studio mode"><button className={view==='artwork'?'active':''} aria-pressed={view==='artwork'} disabled={busy} onClick={()=>setView('artwork')}><ImagePlus size={16}/>Artwork</button><button className={view==='calibration'?'active':''} aria-pressed={view==='calibration'} disabled={busy} onClick={()=>setView('calibration')}><Settings2 size={16}/>Calibrate your discs</button></nav>
+   <div hidden={view!=='calibration'}><Calibration geometry={geometry} engine={engine.current} ready={load.ready} busy={busy} store={calibration} setStore={setCalibration} onExport={exportISO} onApply={applyProfile} onError={setError} browserDownload={browserDownload} setBrowserDownload={setBrowserDownload}/></div>
+   <div className="studio" hidden={view!=='artwork'}>
     <aside className="controls"><fieldset disabled={busy}>
      <Section number="01" title="Your image">
       <button className="upload-area" onClick={()=>input.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();void importFile(e.dataTransfer.files[0])}}><span className="upload-icon"><Upload size={20}/></span><strong>Drop an image, or browse</strong><span>PNG, JPG, WebP, GIF or BMP · up to 40 MB</span></button>
@@ -158,18 +171,20 @@ export default function App(){
      <div className="preview-note"><Info size={15}/><span>A layout preview. Disc material, calibration and light shape the final result.</span></div>
     </section>
    </div>
-   <section className="export-section">
+   <section className={'export-section '+(view==='calibration'?'cal-export-status':'')} hidden={view==='calibration'&&!busy&&!result&&!error}>
+    <div hidden={view!=='artwork'}>
     <div className="export-heading"><span className="step-number">04</span><div><h2>Ready for the real thing?</h2><p>Build your ISO. Burn it. Hold your artwork.</p></div></div>
-    <div className="export-options"><label className="select-field">YOUR BLANK DISC<select aria-label="Disc preset" disabled={busy} value={preset} onChange={e=>{setPreset(e.target.value);setGeometry(presets.find(p=>p.id===e.target.value)!.geometry)}}>{presets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label className="select-field">EXPORT<select aria-label="Export size" disabled={busy} value={proof?'proof':'full'} onChange={e=>setProof(e.target.value==='proof')}><option value="full">Full disc · {prettyBytes(geometry.sectors*2048)}</option><option value="proof">Inner-ring test · 67.1 MB</option></select></label><button className="export-button" onClick={()=>void exportISO()} disabled={busy||!load.ready||!validGeometry}><ArrowDownToLine size={18}/>{busy?'Creating your ISO…':'Generate ISO'}<span>{prettyBytes(total)}</span></button></div>
+    <div className="export-options"><label className="select-field">YOUR BLANK DISC<select aria-label="Disc preset" disabled={busy} value={preset} onChange={e=>{setPreset(e.target.value);const p=calibration.profiles.find(p=>'profile:'+p.id===e.target.value)??presets.find(p=>p.id===e.target.value);if(p)setGeometry({...p.geometry})}}>{presets.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}{calibration.profiles.map(p=><option key={p.id} value={'profile:'+p.id}>{p.name} · {p.stage==='bands'?'coarse':'line fitted'}</option>)}</select></label><label className="select-field">EXPORT<select aria-label="Export size" disabled={busy} value={proof?'proof':'full'} onChange={e=>setProof(e.target.value==='proof')}><option value="full">Full disc · {prettyBytes(geometry.sectors*2048)}</option><option value="proof">Inner-ring test · 67.1 MB</option></select></label><button className="export-button" onClick={()=>void exportISO()} disabled={busy||!load.ready||!validGeometry}><ArrowDownToLine size={18}/>{busy?'Creating your ISO…':'Generate ISO'}<span>{prettyBytes(total)}</span></button></div>
     {proof&&<p className="proof-note"><Info size={14}/>The test ISO writes only a narrow inner ring. Use full disc for the complete artwork.</p>}
+    </div>
     {busy&&<div className="export-progress" role="status" aria-live="polite"><div><strong>{phase} <span>{percent.toFixed(1)}%</span></strong><button className="text-button" onClick={()=>{setPhase('Cancelling…');abort.current?.abort();exportEngine.current?.close()}}>Cancel <X size={14}/></button></div><progress max={total} value={completed}/><p>{prettyBytes(completed)} of {prettyBytes(total)} · {completed>0?'about '+Math.max(1,Math.ceil(remaining/60))+' min remaining':'Keep this tab open'} · streaming to disk</p></div>}
     {result&&!busy&&<div className="success-message" role="status"><Check size={19}/><div><strong>{result.url?'Your ISO is ready':'ISO saved to your computer'}</strong><span>{result.name} · {prettyBytes(result.bytes)}. Burn as a disc image and finalize the disc.</span></div>{result.url&&<a className="small-button" href={result.url} download={result.name}>Download ISO <ArrowDownToLine size={15}/></a>}</div>}
     {error&&<div className="error-message" role="alert"><Info size={18}/><span>{error}</span><button className="icon-button" aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
-    <div className="export-details"><span><ShieldCheck size={15}/>Your image never leaves this browser</span><span><Disc3 size={15}/>Art first. No audio or video.</span><details><summary><Settings2 size={14}/>Fine-tune your disc <ChevronDown size={13}/></summary><div className="advanced"><p>Accurate media geometry makes the difference. Measured presets are from DiscImageStudio; generic values need a test burn. Changes apply to the selected preset for this session.</p><div className="geometry-fields">{([['inner','Inner radius (mm)'],['outer','Outer radius (mm)'],['bitLength','Channel bit (nm)'],['sectors','Sector capacity'],['pitchLinear','Pitch · linear'],['pitchQuadratic','Pitch · quadratic'],['pitchCubic','Pitch · cubic'],['startAngle','Start angle (°)']] as const).map(([key,label])=><label key={key}>{label}<input aria-label={label} type="number" step="any" disabled={busy} value={geometry[key]} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setGeometry(g=>({...g,[key]:n}))}}/></label>)}<label>Save method<select aria-label="Save method" disabled={busy} value={browserDownload?"download":"direct"} onChange={e=>setBrowserDownload(e.target.value==="download")}><option value="direct">Save directly · recommended</option><option value="download">Browser download · uses local storage</option></select></label><label>Artwork resolution<select aria-label="Artwork resolution" disabled={busy} value={size} onChange={e=>setSize(Number(e.target.value))}><option value={4096}>4096 × 4096 · highest detail</option><option value={2048}>2048 × 2048 · lower memory</option></select></label></div></div></details></div>
+    <div className="export-details" hidden={view!=='artwork'}><span><ShieldCheck size={15}/>Your image never leaves this browser</span><span><Disc3 size={15}/>Art first. No audio or video.</span><details><summary><Settings2 size={14}/>Fine-tune your disc <ChevronDown size={13}/></summary><div className="advanced"><p>Accurate media geometry makes the difference. Measured presets are from DiscImageStudio; generic values need a test burn. Advanced edits apply for this session. Use Calibrate your discs to measure and save a burner / media profile.</p><div className="geometry-fields">{([['inner','Inner radius (mm)'],['outer','Outer radius (mm)'],['bitLength','Channel bit (nm)'],['sectors','Sector capacity'],['pitchLinear','Pitch · linear'],['pitchQuadratic','Pitch · quadratic'],['pitchCubic','Pitch · cubic'],['startAngle','Start angle (°)']] as const).map(([key,label])=><label key={key}>{label}<input aria-label={label} type="number" step="any" disabled={busy} value={geometry[key]} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n))setGeometry(g=>({...g,[key]:n}))}}/></label>)}<label>Save method<select aria-label="Save method" disabled={busy} value={browserDownload?"download":"direct"} onChange={e=>setBrowserDownload(e.target.value==="download")}><option value="direct">Save directly · recommended</option><option value="download">Browser download · uses local storage</option></select></label><label>Artwork resolution<select aria-label="Artwork resolution" disabled={busy} value={size} onChange={e=>setSize(Number(e.target.value))}><option value={4096}>4096 × 4096 · highest detail</option><option value={2048}>2048 × 2048 · lower memory</option></select></label></div></div></details></div>
    </section>
    <section className="how-strip"><div><span className="strip-number">1</span><p><strong>Make it yours.</strong><br/>Photos, illustrations, a happy accident.</p></div><div><span className="strip-number">2</span><p><strong>Let the pattern do the work.</strong><br/>Carefully chosen data becomes visible art.</p></div><div><span className="strip-number">3</span><p><strong>Burn a little something different.</strong><br/>A regular burner. A blank DVD. Your image.</p></div></section>
   </main>
   <footer><span>Made for the joy of making.</span><div><span>{load.ready?'Go + WebAssembly · '+prettyBytes(load.total):'Go + WebAssembly'}</span><a href="https://github.com/officialdavidtaylor/disk-art" target="_blank" rel="noreferrer">Source <ArrowUpRight size={12}/></a><a href="/LICENSE" target="_blank" rel="noreferrer">GPL-3.0+</a></div></footer>
-  {help&&<div className="modal-backdrop" onClick={()=>setHelp(false)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={e=>e.stopPropagation()}><button className="icon-button close-modal" autoFocus aria-label="Close instructions" onClick={()=>setHelp(false)}><X size={20}/></button><Disc3 size={34} className="orange"/><h2 id="help-title">An image, written in data.</h2><p>DVD Art chooses data patterns that create contrasting textures on the recording side of a DVD. Your burner handles the physical writing.</p><ol><li>Import an image, then position it in the recording ring. Bold shapes work well. Use dithering for photographs.</li><li>Choose your actual blank media. Geometry is sensitive: a generic preset can produce a curved or distorted image. Use a measured preset or calibrate the values.</li><li>Generate a full-disc ISO. Desktop Chrome or Edge can save directly to disk; other supported browsers use temporary local storage. Leave at least 5 GB free.</li><li>Use your burning application's <strong>burn disc image</strong> mode, select this ISO, and finalize a blank single-layer DVD. Copying the ISO as a file will not work.</li></ol><p>The disc mounts as a minimal data volume with README.TXT and WEBSITE.URL. It contains no playable media; standalone players may report “no playable content” or reject it.</p><p>Physical contrast and readback depend on the recorder and media. This MVP prioritizes artwork textures; a hardware burn has not yet been validated. The preview is not an optical simulation.</p><a href="https://github.com/JiaFeiMiao-K-Cat/DiscImageStudio" target="_blank" rel="noreferrer">Based on research from DiscImageStudio <ArrowUpRight size={14}/></a></div></div>}
+  {help&&<div className="modal-backdrop" onClick={()=>setHelp(false)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="help-title" onClick={e=>e.stopPropagation()}><button className="icon-button close-modal" autoFocus aria-label="Close instructions" onClick={()=>setHelp(false)}><X size={20}/></button><Disc3 size={34} className="orange"/><h2 id="help-title">An image, written in data.</h2><p>DVD Art chooses data patterns that create contrasting textures on the recording side of a DVD. Your burner handles the physical writing.</p><ol><li>Import an image, then position it in the recording ring. Bold shapes work well. Use dithering for photographs.</li><li>Choose your actual blank media. Geometry is sensitive: a generic preset can produce a curved or distorted image. Use a measured preset or open Calibrate your discs for guided test burns and saved profiles.</li><li>Generate a full-disc ISO. Desktop Chrome or Edge can save directly to disk; other supported browsers use temporary local storage. Leave at least 5 GB free.</li><li>Use your burning application's <strong>burn disc image</strong> mode, select this ISO, and finalize a blank single-layer DVD. Copying the ISO as a file will not work.</li></ol><p>The disc mounts as a minimal data volume with README.TXT and WEBSITE.URL. It contains no playable media; standalone players may report “no playable content” or reject it.</p><p>Physical contrast and readback depend on the recorder and media. This MVP prioritizes artwork textures; a hardware burn has not yet been validated. The preview is not an optical simulation.</p><a href="https://github.com/JiaFeiMiao-K-Cat/DiscImageStudio" target="_blank" rel="noreferrer">Based on research from DiscImageStudio <ArrowUpRight size={14}/></a></div></div>}
  </div>;
 }

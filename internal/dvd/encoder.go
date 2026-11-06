@@ -30,6 +30,7 @@ type Encoder struct {
 	image    []byte
 	size     int
 	prefix   []byte
+	pattern  string
 }
 
 func NewEncoder(c Config, gray []byte, size int) (*Encoder, error) {
@@ -44,7 +45,7 @@ func NewEncoder(c Config, gray []byte, size int) (*Encoder, error) {
 	if volume == 0 {
 		volume = c.Sectors
 	}
-	return &Encoder{c, g, gray, size, ISOPrefix(volume)}, nil
+	return &Encoder{Config: c, geometry: g, image: gray, size: size, prefix: ISOPrefix(volume)}, nil
 }
 
 func (e *Encoder) Fill(start uint32, out []byte) error {
@@ -64,6 +65,19 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 			continue
 		}
 		mask := &masks[((lba+0x30000)>>4)&15]
+		if e.pattern == "bands" {
+			edges := BandSectors(e.Config.Sectors)
+			texture := byte(0x92)
+			for k := 0; k < 6; k += 2 {
+				if lba >= edges[k] && lba < edges[k+1] {
+					texture = 0xa5
+				}
+			}
+			for i := range dst {
+				dst[i] = texture ^ mask[i]
+			}
+			continue
+		}
 		// Restart at every sync boundary. Within a <=91-word span, a complex
 		// rotation follows the circle instead of linearly approximating its chord.
 		// Radial drift is included. Error against exact spiral samples is tested.
@@ -87,7 +101,11 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 				x := int((r*cosine + e.Config.Outer) * scale)
 				y := int((r*sine + e.Config.Outer) * scale)
 				texture := byte(0x92)
-				if x >= 0 && x < e.size && y >= 0 && y < e.size && e.image[y*e.size+x] < 128 {
+				dark := x >= 0 && x < e.size && y >= 0 && y < e.size && e.image[y*e.size+x] < 128
+				if e.pattern == "line" {
+					dark = cosine > 0 && math.Abs(r*sine) < .6
+				}
+				if dark {
 					texture = 0xa5
 				}
 				dst[i+j] = texture ^ mask[i+j]

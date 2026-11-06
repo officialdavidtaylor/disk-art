@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {maxell,photoFrame,validGeometry,validateRecord,validateProfile,loadCalibration,bandFractions} from '../src/calibration.ts';
+const record={kind:'dvd-art-calibration',version:1,id:'test',created:new Date().toISOString(),pattern:'bands',geometry:{...maxell},media:'Maxell DVD+R',burner:'Test',speed:'8x',radii:Array(6).fill(''),points:[],fitPitch:false};
+assert.ok(validateRecord(record));
+assert.ok(!validateRecord({...record,version:2}));
+assert.ok(!validateRecord({...record,points:[{x:NaN,y:0}]}));
+assert.ok(!validateRecord({...record,geometry:{...maxell,sectors:2295105}}));
+assert.ok(!validGeometry({...maxell,pitchLinear:.1}));
+assert.ok(!validateRecord({...record,radii:[]}));
+const profile={kind:'dvd-art-profile',version:1,id:'p',name:'Test',created:record.created,geometry:{...maxell},media:record.media,burner:record.burner,speed:record.speed,stage:'bands',rms:.001,record};
+assert.ok(validateProfile(profile));assert.ok(!validateProfile({...profile,rms:Infinity}));
+// Test origin-independent physical rim scaling and reject elliptical / inconsistent marks.
+assert.deepEqual(photoFrame([{x:80,y:680},{x:1280,y:680},{x:680,y:80},{x:680,y:1280}]),{center:{x:680,y:680},scale:10});
+assert.throws(()=>photoFrame([{x:80,y:680},{x:1280,y:680},{x:680,y:100},{x:680,y:1260}]));
+assert.throws(()=>photoFrame([{x:80,y:680},{x:1280,y:680},{x:700,y:80},{x:700,y:1280}]));
+assert.equal(photoFrame([]),null);
+assert.equal(bandFractions(maxell.sectors)[0],80329/maxell.sectors);
+// Round-trip saved JSON without modifying a frozen generation geometry.
+let value=JSON.stringify({records:[record],profiles:[profile]});
+globalThis.localStorage={getItem:()=>value};
+const loaded=loadCalibration();loaded.profiles[0].geometry.inner=24.1;
+assert.equal(loaded.records[0].geometry.inner,24);
+assert.equal(loaded.profiles[0].record.geometry.inner,24);
+value='{"records":[{}],"profiles":[]}';assert.throws(loadCalibration);
+console.log('Calibration schema, frozen records and photo-scale checks passed.');

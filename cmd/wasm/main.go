@@ -1,7 +1,6 @@
 //go:build js && wasm
 
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 package main
 
 import (
@@ -38,6 +37,34 @@ func process(a []js.Value) ([]byte, int, error) {
 	return gray, size, err
 }
 func main() {
+	bind("dvdCalibrationStart", func(a []js.Value) any {
+		encoder = nil
+		var c dvd.Config
+		if err := json.Unmarshal([]byte(a[0].String()), &c); err != nil {
+			return fail(err)
+		}
+		var err error
+		encoder, err = dvd.NewCalibrationEncoder(c, a[1].String())
+		if err != nil {
+			return fail(err)
+		}
+		return true
+	})
+	bind("dvdCalibrate", func(a []js.Value) any {
+		var q dvd.CalibrationRequest
+		if err := json.Unmarshal([]byte(a[0].String()), &q); err != nil {
+			return fail(err)
+		}
+		result, err := dvd.Calibrate(q)
+		if err != nil {
+			return fail(err)
+		}
+		data, err := json.Marshal(result)
+		if err != nil {
+			return fail(err)
+		}
+		return string(data)
+	})
 	bind("dvdPreview", func(a []js.Value) any {
 		gray, _, err := process(a)
 		if err != nil {
