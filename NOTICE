@@ -1,0 +1,23 @@
+DVD Art
+Copyright (C) 2026 DVD Art contributors
+SPDX-License-Identifier: GPL-3.0-or-later
+
+The DVD scrambling, payload-channel mapping, A5/92 texture strategy and measured
+media presets are adapted from or informed by DiscImageStudio:
+https://github.com/JiaFeiMiao-K-Cat/DiscImageStudio
+Reference commit: c720fd45b76dc4d9257316474dd646a91589ffdb
+Copyright DiscImageStudio authors and contributors, GPL-3.0-or-later.
+See src/DvdImageSolver/Encoding/DvdDataFrameBuilder.cs,
+src/DvdImageSolver/Encoding/DvdEccBlockEncoder.cs,
+src/DvdImageSolver/Solver/FastDispersionImageWriter.cs,
+src/DiscImageStudio.Core/DvdTrackGeometry.cs, and
+src/DiscImageStudio.Core/Presets/built-in-disc-presets.json in that project.
+Measured presets were contributed upstream by H4CNPE, Disappear9, DBPolp,
+EternalEve, bczhc and other DiscImageStudio contributors. They are not universal
+calibrations for every drive or every disc with the same marketing name.
+
+This application is distributed under GPL-3.0-or-later. See LICENSE.
+Corresponding source: https://github.com/officialdavidtaylor/disk-art
+
+The bundled wasm_exec.js is part of Go and retains its BSD-style license header.
+React is MIT licensed. Lucide icons are ISC licensed.

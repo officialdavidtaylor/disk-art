@@ -1,0 +1,11 @@
+import {resolve} from 'node:path';
+import {loadAndParseConfig} from '@cloudflare/config';
+import {cleanBuildOutputDir,writeAssets,writeWorkerConfig,writeRootConfig} from '@cloudflare/build-output-utils';
+const root=process.cwd(),context={isPreview:false,mode:'production'};
+const {result}=await loadAndParseConfig(resolve('cloudflare.config.ts'),context);
+if(!result.success)throw Error(JSON.stringify(result.error));
+await cleanBuildOutputDir(root);
+await writeRootConfig(root,{accountId:result.data.accountId},context);
+await writeWorkerConfig({root,config:result.data.worker});
+await writeAssets({root,sourceDirectory:resolve('dist')});
+console.log('Cloudflare static asset build prepared.');

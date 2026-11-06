@@ -1,0 +1,12 @@
+node_modules/
+dist/
+public/encoder.wasm
+public/encoder-meta.json
+public/wasm_exec.js
+*.tsbuildinfo
+*.iso
+.DS_Store
+.cloudflare/
+public/GO-LICENSE
+public/LICENSE
+public/NOTICE

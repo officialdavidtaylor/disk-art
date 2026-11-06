@@ -1,0 +1,24 @@
+name: Verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - run: npm ci
+      - run: npm run build:cloudflare
+      - run: npm test
+        env:
+          TEST_ISO: /tmp/dvd-art-test.iso
+      - run: pip install pycdlib==1.22.0
+      - run: python scripts/verify-iso.py /tmp/dvd-art-test.iso

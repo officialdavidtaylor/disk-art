@@ -1,0 +1,107 @@
+[
+  {
+    "id": "dvd-5-120mm",
+    "name": "Generic DVD+R · 4.7 GB",
+    "measured": false,
+    "geometry": {
+      "sectors": 2295104,
+      "inner": 24,
+      "outer": 58,
+      "bitLength": 133.3,
+      "pitchLinear": 0,
+      "pitchQuadratic": 0,
+      "pitchCubic": 0,
+      "startAngle": 0
+    }
+  },
+  {
+    "id": "verbatim-dvd-r-azo-43533",
+    "name": "Verbatim DVD−R AZO · 43533",
+    "measured": true,
+    "geometry": {
+      "sectors": 2297888,
+      "inner": 23.991460627731737,
+      "outer": 57.964893657925366,
+      "bitLength": 133.3,
+      "pitchLinear": -0.000039256854319227684,
+      "pitchQuadratic": 0.00006964795915429256,
+      "pitchCubic": -0.00004670918950137523,
+      "startAngle": 0
+    }
+  },
+  {
+    "id": "verbatim-dvd-r-azo-43523",
+    "name": "Verbatim DVD−R AZO · 43523",
+    "measured": true,
+    "geometry": {
+      "sectors": 2297888,
+      "inner": 23.991460627731737,
+      "outer": 57.964893657925366,
+      "bitLength": 133.3,
+      "pitchLinear": -0.000039256854319227684,
+      "pitchQuadratic": 0.00006964795915429256,
+      "pitchCubic": -0.00004670918950137523,
+      "startAngle": 0
+    }
+  },
+  {
+    "id": "verbatim-dvd-plus-r-azo-43498",
+    "name": "Verbatim DVD+R AZO · 43498",
+    "measured": true,
+    "geometry": {
+      "sectors": 2295104,
+      "inner": 23.954070288547207,
+      "outer": 57.981456053451275,
+      "bitLength": 133.3,
+      "pitchLinear": -0.000011055153059816393,
+      "pitchQuadratic": -0.0000017233535436312236,
+      "pitchCubic": 0.00000555123860136712,
+      "startAngle": 0
+    }
+  },
+  {
+    "id": "philips-dvd-plus-r",
+    "name": "Philips DVD+R",
+    "measured": true,
+    "geometry": {
+      "sectors": 2295104,
+      "inner": 24.157723798864616,
+      "outer": 57.8810391592571,
+      "bitLength": 133.3,
+      "pitchLinear": -0.00015487792452410765,
+      "pitchQuadratic": 0.0001962455822194293,
+      "pitchCubic": -0.00008668360288829188,
+      "startAngle": 0
+    }
+  },
+  {
+    "id": "ritek-dvd-plus-r-e-series",
+    "name": "Ritek DVD+R · E Series",
+    "measured": true,
+    "geometry": {
+      "sectors": 2295104,
+      "inner": 24.048201325754512,
+      "outer": 58.02648816120639,
+      "bitLength": 133.3,
+      "pitchLinear": 0.00004448895078187968,
+      "pitchQuadratic": -0.00010130233076827166,
+      "pitchCubic": 0.00006625808735161595,
+      "startAngle": 0
+    }
+  },
+  {
+    "id": "ritek-dvd-r-e-series",
+    "name": "Ritek DVD−R · E Series",
+    "measured": true,
+    "geometry": {
+      "sectors": 2298496,
+      "inner": 24.063109184084034,
+      "outer": 58.23373375457525,
+      "bitLength": 133.3,
+      "pitchLinear": -0.0000032229430281730407,
+      "pitchQuadratic": 0.000010507210681810583,
+      "pitchCubic": -0.000008562064227346657,
+      "startAngle": 0
+    }
+  }
+]
