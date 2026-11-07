@@ -22,7 +22,10 @@ src/DiscImageStudio.Core/Calibration/CalibrationWideBandPattern.cs,
 CalibrationCrossPrediction.cs, CalibrationCrossFitter.cs and CalibrationFitter.cs.
 The Go fitter, browser photo measurement workflow and persistence code are
 implemented for this application. The Maxell DVD+R preset is nominal, not an
-upstream measured calibration.
+upstream measured calibration. The separately bundled e3ff7e7e coarse profile
+is derived from user-supplied Maxell / GP60NB50 / 4x ring measurements. The
+versioned angular-rate sweep pattern and its radius fitter were implemented
+for this application.
 
 This application is distributed under GPL-3.0-or-later. See LICENSE.
 Corresponding source: https://github.com/officialdavidtaylor/disk-art

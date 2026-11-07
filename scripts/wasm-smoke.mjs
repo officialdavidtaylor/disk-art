@@ -4,12 +4,18 @@ import assert from 'node:assert/strict';
 await import('../public/wasm_exec.js');
 const go=new Go();const wasm=await WebAssembly.instantiate(readFileSync('public/encoder.wasm'),go.importObject);go.run(wasm.instance);
 const config={sectors:2295104,inner:24,outer:58,bitLength:133.3,pitchLinear:0,pitchQuadratic:0,pitchCubic:0,startAngle:0};
+const baseline={...config,inner:24.01779148781394,outer:57.82313919831214};
+const sweepPlan=JSON.parse(dvdSweepPlan(JSON.stringify(baseline)));assert.equal(sweepPlan.bands.length,63);
+assert.equal(sweepPlan.bands[10].ppm,0);assert.ok(dvdSweepPlan(JSON.stringify({...config,outer:40})).error);
+const sweepFit=JSON.parse(dvdSweepFit(JSON.stringify({basis:baseline,continuous:true,observations:[1,2,3].map(zone=>({zone,candidate:11,innerAngle:37,outerAngle:37}))})));
+assert.ok(Math.abs(sweepFit.geometry.inner-baseline.inner)<1e-7);
+assert.ok(dvdSweepFit(JSON.stringify({basis:baseline,continuous:false,observations:[]})).error);
 const radii=[35,170,305,510,705,955].map(p=>Math.sqrt(24.12**2+(57.94**2-24.12**2)*Math.ceil(config.sectors*p/1000)/config.sectors));
 const fitted=JSON.parse(dvdCalibrate(JSON.stringify({mode:'bands',basis:config,radii})));
 assert.ok(Math.abs(fitted.geometry.inner-24.12)<1e-8);
 assert.ok(Math.abs(fitted.geometry.outer-57.94)<1e-8);
 assert.ok(dvdCalibrationStart(JSON.stringify({...config,outputSectors:32768}),'bands').error);
-for(const pattern of ['bands','line','triangles-v1']){
+for(const pattern of ['bands','line','triangles-v1','sweep-v1']){
  assert.equal(dvdCalibrationStart(JSON.stringify(config),pattern),true);
  const header=dvdChunk(16,1);assert.equal(new DataView(header.buffer).getUint32(80,true),config.sectors);
  assert.ok(dvdChunk(config.sectors-16,16) instanceof Uint8Array);dvdRelease();
@@ -22,8 +28,9 @@ assert.ok(dvdCalibrate(JSON.stringify({mode:'triangles-v1',basis:config,points:t
 const size=128,pixels=new Uint8Array(size*size*4);for(let y=0;y<size;y++)for(let x=0;x<size;x++){const i=(y*size+x)*4;const v=(Math.floor(x/16)+Math.floor(y/16))%2?255:0;pixels.set([v,v,v,255],i)}
 const tone={brightness:0,contrast:1,gamma:1,threshold:.5,dither:false,invert:false};
 const count=process.argv.includes('--full')?config.sectors:32768;
+const exportConfig=process.argv.includes('--baseline=maxell-e3ff7e7e')?baseline:config;
 const pattern=process.argv.find(a=>a.startsWith('--pattern='))?.split('=')[1];
-if(pattern)assert.equal(dvdCalibrationStart(JSON.stringify({...config,outputSectors:count}),pattern),true);
+if(pattern)assert.equal(dvdCalibrationStart(JSON.stringify({...exportConfig,outputSectors:count}),pattern),true);
 else assert.equal(dvdStart(pixels,size,JSON.stringify(tone),JSON.stringify({...config,outputSectors:count})),true);
 const hash=createHash('sha256');const start=performance.now();let bytes=0;const save=process.env.TEST_ISO;const fd=save?openSync(save,'w'):null;
 for(let lba=0;lba<count;lba+=256){

@@ -1,13 +1,13 @@
 import type {Geometry} from './engine';
-export type Pattern='bands'|'line'|'triangles-v1';
+export type Pattern='bands'|'line'|'triangles-v1'|'sweep-v1';
 export type TriangleEdge='clockwise'|'counterclockwise';
 export type AngularDiagnostics={innerDeltaMM:number;outerDeltaMM:number;driftDegrees:number;peakToPeakDegrees:number;innerPitchNM:number;outerPitchNM:number;photoRotationDegrees:number;stations:{radius:number;degrees:number}[]};
-export const patternName=(p:Pattern)=>p==='bands'?'Broad rings':p==='triangles-v1'?'Triangle spokes':'Single line';
+export const patternName=(p:Pattern)=>p==='sweep-v1'?'Coarse angular sweep':p==='bands'?'Broad rings':p==='triangles-v1'?'Triangle spokes':'Single line';
 export const triangleShape=(g:Geometry)=>({base:g.inner+.6,tip:g.outer-.6,halfBase:4});
 export type Point={x:number;y:number};
 export type Fit={geometry:Geometry;rms:number;maxError:number;rotation:number;warnings:string[];curve?:Point[];diagnostics?:AngularDiagnostics};
-export type BurnRecord={kind:'dvd-art-calibration';version:1;id:string;created:string;pattern:Pattern;geometry:Geometry;media:string;burner:string;speed:string;exportedAt?:string;radii:string[];points:Point[];fitPitch:boolean;triangleEdge?:TriangleEdge};
-export type Profile={kind:'dvd-art-profile';version:1;id:string;name:string;created:string;geometry:Geometry;media:string;burner:string;speed:string;stage:Pattern;rms:number;record:BurnRecord;diagnostics?:AngularDiagnostics};
+export type BurnRecord={kind:'dvd-art-calibration';version:1;id:string;created:string;pattern:Pattern;geometry:Geometry;media:string;burner:string;speed:string;exportedAt?:string;radii:string[];points:Point[];fitPitch:boolean;triangleEdge?:TriangleEdge;baselineId?:string;sweep?:SweepMeasurements};
+export type Profile={kind:'dvd-art-profile';version:1;id:string;name:string;created:string;geometry:Geometry;media:string;burner:string;speed:string;stage:Pattern;rms?:number;angularRmsDegrees?:number;record:BurnRecord;diagnostics?:AngularDiagnostics};
 export type CalibrationStore={records:BurnRecord[];profiles:Profile[]};
 export const storageKey='dvd-art-calibration-v1';
 export const edgeLabels=['Band 1 · inner edge','Band 1 · outer edge','Band 2 · inner edge','Band 2 · outer edge','Band 3 · inner edge','Band 3 · outer edge'];
@@ -21,11 +21,11 @@ export function validGeometry(value:unknown):value is Geometry{
 const string=(v:unknown,max=160)=>typeof v==='string'&&v.length<=max;
 export function validateRecord(v:unknown):v is BurnRecord{
  if(!v||typeof v!=='object')return false;const r=v as BurnRecord;
- return r.kind==='dvd-art-calibration'&&r.version===1&&string(r.id)&&string(r.created)&&!Number.isNaN(Date.parse(r.created))&&(r.pattern==='bands'||r.pattern==='line'||(r.pattern==='triangles-v1'&&(r.triangleEdge==='clockwise'||r.triangleEdge==='counterclockwise')&&r.geometry?.outer-r.geometry?.inner>=10))&&validGeometry(r.geometry)&&string(r.media)&&string(r.burner)&&string(r.speed)&&Array.isArray(r.radii)&&r.radii.length===6&&r.radii.every(x=>string(x,30))&&Array.isArray(r.points)&&r.points.length<=2000&&r.points.every(p=>p&&typeof p.x==='number'&&typeof p.y==='number'&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Math.hypot(p.x,p.y)<=65)&&typeof r.fitPitch==='boolean';
+ return r.kind==='dvd-art-calibration'&&r.version===1&&string(r.id)&&string(r.created)&&!Number.isNaN(Date.parse(r.created))&&(r.baselineId===undefined||string(r.baselineId))&&(r.pattern==='bands'||r.pattern==='line'||(r.pattern==='sweep-v1'&&r.geometry?.outer-r.geometry?.inner>=28&&validSweepMeasurements(r.sweep))||(r.pattern==='triangles-v1'&&(r.triangleEdge==='clockwise'||r.triangleEdge==='counterclockwise')&&r.geometry?.outer-r.geometry?.inner>=10))&&validGeometry(r.geometry)&&string(r.media)&&string(r.burner)&&string(r.speed)&&Array.isArray(r.radii)&&r.radii.length===6&&r.radii.every(x=>string(x,30))&&Array.isArray(r.points)&&r.points.length<=2000&&r.points.every(p=>p&&typeof p.x==='number'&&typeof p.y==='number'&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Math.hypot(p.x,p.y)<=65)&&typeof r.fitPitch==='boolean';
 }
 export function validateProfile(v:unknown):v is Profile{
  if(!v||typeof v!=='object')return false;const p=v as Profile;
- return p.kind==='dvd-art-profile'&&p.version===1&&string(p.id)&&string(p.name)&&string(p.created)&&string(p.media)&&string(p.burner)&&string(p.speed)&&validGeometry(p.geometry)&&(p.stage==='bands'||p.stage==='line'||p.stage==='triangles-v1')&&Number.isFinite(p.rms)&&p.rms>=0&&validateRecord(p.record)&&(p.diagnostics===undefined||validDiagnostics(p.diagnostics));
+ return p.kind==='dvd-art-profile'&&p.version===1&&string(p.id)&&string(p.name)&&string(p.created)&&string(p.media)&&string(p.burner)&&string(p.speed)&&validGeometry(p.geometry)&&(p.stage==='bands'||p.stage==='line'||p.stage==='triangles-v1'||p.stage==='sweep-v1')&&(p.stage==='sweep-v1'?typeof p.angularRmsDegrees==='number'&&Number.isFinite(p.angularRmsDegrees)&&p.angularRmsDegrees>=0:typeof p.rms==='number'&&Number.isFinite(p.rms)&&p.rms>=0)&&validateRecord(p.record)&&(p.diagnostics===undefined||validDiagnostics(p.diagnostics));
 }
 
 export function validDiagnostics(v:unknown):v is AngularDiagnostics{
@@ -57,4 +57,12 @@ export function photoFrame(rim:Point[]){
  const scale=(width+height)/240;
  if(Math.abs(width/height-1)>.015||Math.hypot((l.x+r.x-t.x-b.x)/2,(l.y+r.y-t.y-b.y)/2)/scale>.5)throw Error('The rim is not circular or centred. Use a straight-on photo, then mark the four outermost rim points again.');
  return {center,scale};
+}
+
+export type SweepReading={candidate:number|null;innerAngle:string;outerAngle:string};
+export type SweepMeasurements={readings:SweepReading[];continuous:boolean};
+export const emptySweep=():SweepMeasurements=>({readings:Array.from({length:3},()=>({candidate:null,innerAngle:'',outerAngle:''})),continuous:false});
+export function validSweepMeasurements(v:unknown):v is SweepMeasurements {
+ if(!v||typeof v!=='object')return false;const s=v as SweepMeasurements;
+ return typeof s.continuous==='boolean'&&Array.isArray(s.readings)&&s.readings.length===3&&s.readings.every(r=>r&&(r.candidate===null||Number.isInteger(r.candidate)&&r.candidate>=1&&r.candidate<=21)&&[r.innerAngle,r.outerAngle].every(a=>typeof a==='string'&&a.length<30&&(a===''||a.trim()!==''&&Number.isFinite(Number(a))&&Math.abs(Number(a))<=360)));
 }

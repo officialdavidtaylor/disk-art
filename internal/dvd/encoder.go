@@ -31,6 +31,7 @@ type Encoder struct {
 	size     int
 	prefix   []byte
 	pattern  string
+	sweep    []SweepBand
 }
 
 func NewEncoder(c Config, gray []byte, size int) (*Encoder, error) {
@@ -78,6 +79,16 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 			}
 			continue
 		}
+		var band *SweepBand
+		if e.pattern == SweepPattern {
+			band = sweepBandAt(e.sweep, lba)
+			if band == nil {
+				for i := range dst {
+					dst[i] = 0x92 ^ mask[i]
+				}
+				continue
+			}
+		}
 		// Restart at every sync boundary. Within a <=91-word span, a complex
 		// rotation follows the circle instead of linearly approximating its chord.
 		// Radial drift is included. Error against exact spiral samples is tested.
@@ -92,9 +103,14 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 			}
 			channel := float64(lba)*ChannelBitsPerSector + float64(PayloadChannel(i))
 			r, angle := e.geometry.Polar(channel)
+			rate := 1.0
+			if band != nil {
+				rate = band.Rate
+				angle += (rate - 1) * (angle - band.anchor)
+			}
 			sine, cosine := math.Sincos(angle)
 			stepArc := 16 * e.Config.BitLength * 1e-6
-			da := stepArc / r
+			da := rate * stepArc / r
 			ds, dc := math.Sincos(da)
 			dr := stepArc / e.geometry.ds(r)
 			for j := 0; j < count; j++ {
@@ -104,6 +120,9 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 				dark := x >= 0 && x < e.size && y >= 0 && y < e.size && e.image[y*e.size+x] < 128
 				if e.pattern == "line" {
 					dark = cosine > 0 && math.Abs(r*sine) < .6
+				}
+				if band != nil {
+					dark = sine > 0
 				}
 				if e.pattern == TrianglePattern {
 					dark = triangleDark(e.Config, r*cosine, r*sine)

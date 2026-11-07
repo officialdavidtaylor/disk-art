@@ -19,7 +19,7 @@ func BandSectors(sectors uint32) [6]uint32 {
 }
 
 func NewCalibrationEncoder(c Config, pattern string) (*Encoder, error) {
-	if pattern != "bands" && pattern != "line" && pattern != TrianglePattern {
+	if pattern != "bands" && pattern != "line" && pattern != TrianglePattern && pattern != SweepPattern {
 		return nil, errors.New("unknown calibration pattern")
 	}
 	if c.OutputSectors != 0 && c.OutputSectors != c.Sectors {
@@ -33,6 +33,13 @@ func NewCalibrationEncoder(c Config, pattern string) (*Encoder, error) {
 		return nil, err
 	}
 	e.pattern = pattern
+	if pattern == SweepPattern {
+		plan, err := NewSweepPlan(c)
+		if err != nil {
+			return nil, err
+		}
+		e.sweep = plan.Bands
+	}
 	return e, nil
 }
 

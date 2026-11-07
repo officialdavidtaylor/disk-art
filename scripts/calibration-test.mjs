@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {maxell,photoFrame,validGeometry,validateRecord,validateProfile,loadCalibration,bandFractions,triangleShape,validDiagnostics} from '../src/calibration.ts';
+import {maxell,photoFrame,validGeometry,validateRecord,validateProfile,loadCalibration,bandFractions,triangleShape,validDiagnostics,emptySweep} from '../src/calibration.ts';
 const record={kind:'dvd-art-calibration',version:1,id:'test',created:new Date().toISOString(),pattern:'bands',geometry:{...maxell},media:'Maxell DVD+R',burner:'Test',speed:'8x',radii:Array(6).fill(''),points:[],fitPitch:false};
 assert.ok(validateRecord(record));
 const triangleRecord={...record,pattern:'triangles-v1',triangleEdge:'clockwise'};
@@ -30,3 +30,19 @@ assert.equal(loaded.records[0].geometry.inner,24);
 assert.equal(loaded.profiles[0].record.geometry.inner,24);
 value='{"records":[{}],"profiles":[]}';assert.throws(loadCalibration);
 console.log('Calibration schema, frozen records and photo-scale checks passed.');
+
+const sweep={...record,pattern:'sweep-v1',sweep:emptySweep(),baselineId:'coarse-e3ff7e7e'};
+assert.ok(validateRecord(sweep));assert.ok(!validateRecord({...sweep,sweep:undefined}));
+assert.ok(!validateRecord({...sweep,sweep:{continuous:false,readings:[{candidate:22,innerAngle:'',outerAngle:''}]}}));
+assert.ok(validateProfile({...profile,stage:'sweep-v1',record:sweep,rms:undefined,angularRmsDegrees:.2}));
+assert.ok(!validateProfile({...profile,stage:'sweep-v1',record:sweep,angularRmsDegrees:undefined}));
+const {readDiscSettings}=await import('../src/discSettings.ts');
+const fallback={version:1,preset:'maxell',geometry:{...maxell}};
+const choices=[{id:'maxell',geometry:maxell},{id:'profile:p',geometry:{...maxell,inner:24.01779148781394,outer:57.82313919831214}}];
+const active={version:1,preset:'profile:p',geometry:choices[1].geometry};
+assert.deepEqual(readDiscSettings(JSON.stringify(active),fallback,choices),active);
+const modified={...active,geometry:{...active.geometry,inner:24.02}};
+assert.equal(readDiscSettings(JSON.stringify(modified),fallback,choices).preset,'custom');
+assert.equal(readDiscSettings(JSON.stringify(active),fallback,[]).geometry.inner,active.geometry.inner);
+assert.throws(()=>readDiscSettings(JSON.stringify({...active,geometry:{...maxell,inner:NaN}}),fallback,choices));
+console.log('Sweep record and active geometry persistence checks passed.');

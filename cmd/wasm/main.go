@@ -37,6 +37,36 @@ func process(a []js.Value) ([]byte, int, error) {
 	return gray, size, err
 }
 func main() {
+	bind("dvdSweepPlan", func(a []js.Value) any {
+		var c dvd.Config
+		if err := json.Unmarshal([]byte(a[0].String()), &c); err != nil {
+			return fail(err)
+		}
+		result, err := dvd.NewSweepPlan(c)
+		if err != nil {
+			return fail(err)
+		}
+		data, err := json.Marshal(result)
+		if err != nil {
+			return fail(err)
+		}
+		return string(data)
+	})
+	bind("dvdSweepFit", func(a []js.Value) any {
+		var q dvd.SweepFitRequest
+		if err := json.Unmarshal([]byte(a[0].String()), &q); err != nil {
+			return fail(err)
+		}
+		result, err := dvd.FitSweep(q)
+		if err != nil {
+			return fail(err)
+		}
+		data, err := json.Marshal(result)
+		if err != nil {
+			return fail(err)
+		}
+		return string(data)
+	})
 	bind("dvdCalibrationStart", func(a []js.Value) any {
 		encoder = nil
 		var c dvd.Config
