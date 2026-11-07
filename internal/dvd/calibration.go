@@ -19,11 +19,14 @@ func BandSectors(sectors uint32) [6]uint32 {
 }
 
 func NewCalibrationEncoder(c Config, pattern string) (*Encoder, error) {
-	if pattern != "bands" && pattern != "line" {
+	if pattern != "bands" && pattern != "line" && pattern != TrianglePattern {
 		return nil, errors.New("unknown calibration pattern")
 	}
 	if c.OutputSectors != 0 && c.OutputSectors != c.Sectors {
 		return nil, errors.New("calibration requires a full-disc export")
+	}
+	if pattern == TrianglePattern && c.Outer-c.Inner < 10 {
+		return nil, errors.New("triangle calibration needs at least a 10 mm recording width")
 	}
 	e, err := NewEncoder(c, []byte{255, 255, 255, 255}, 2)
 	if err != nil {
@@ -38,19 +41,21 @@ type Point struct {
 	Y float64 `json:"y"`
 }
 type CalibrationRequest struct {
-	Mode     string    `json:"mode"`
-	Basis    Config    `json:"basis"`
-	Radii    []float64 `json:"radii"`
-	Points   []Point   `json:"points"`
-	FitPitch bool      `json:"fitPitch"`
+	Mode         string    `json:"mode"`
+	Basis        Config    `json:"basis"`
+	Radii        []float64 `json:"radii"`
+	Points       []Point   `json:"points"`
+	FitPitch     bool      `json:"fitPitch"`
+	TriangleEdge string    `json:"triangleEdge"`
 }
 type CalibrationResult struct {
-	Geometry Config   `json:"geometry"`
-	RMS      float64  `json:"rms"`
-	MaxError float64  `json:"maxError"`
-	Rotation float64  `json:"rotation"`
-	Warnings []string `json:"warnings"`
-	Curve    []Point  `json:"curve,omitempty"`
+	Geometry    Config              `json:"geometry"`
+	RMS         float64             `json:"rms"`
+	MaxError    float64             `json:"maxError"`
+	Rotation    float64             `json:"rotation"`
+	Warnings    []string            `json:"warnings"`
+	Curve       []Point             `json:"curve,omitempty"`
+	Diagnostics *AngularDiagnostics `json:"diagnostics,omitempty"`
 }
 
 func Calibrate(q CalibrationRequest) (*CalibrationResult, error) {
@@ -60,7 +65,10 @@ func Calibrate(q CalibrationRequest) (*CalibrationResult, error) {
 	if q.Mode == "bands" {
 		return fitBands(q)
 	}
-	if q.Mode == "line" {
+	if q.Mode == TrianglePattern && (q.Basis.Outer-q.Basis.Inner < 10 || (q.TriangleEdge != "clockwise" && q.TriangleEdge != "counterclockwise")) {
+		return nil, errors.New("select the clockwise or counterclockwise triangle edge; recording width must be at least 10 mm")
+	}
+	if q.Mode == "line" || q.Mode == TrianglePattern {
 		return fitLine(q)
 	}
 	return nil, errors.New("unknown calibration mode")
@@ -168,6 +176,9 @@ func fitLine(q CalibrationRequest) (*CalibrationResult, error) {
 		radii[i] = r
 		if i > 0 {
 			d := math.Remainder(a-angles[i-1], 2*math.Pi)
+			if q.Mode == TrianglePattern && math.Abs(d) > math.Pi/3 {
+				return nil, errors.New("triangle trace steps must turn less than 60 degrees; add points along the same edge without switching spokes")
+			}
 			if math.Abs(d) > math.Pi*.75 {
 				return nil, errors.New("adjacent points turn more than 135 degrees; add points between them to preserve the winding")
 			}
@@ -215,7 +226,7 @@ func fitLine(q CalibrationRequest) (*CalibrationResult, error) {
 		res := make([]float64, n)
 		mean := 0.0
 		for i, r := range radii {
-			res[i] = angles[i] - linePhase(source, g, r)
+			res[i] = angles[i] - tracePhase(q, source, g, r)
 			mean += res[i]
 		}
 		mean /= float64(n)
@@ -228,6 +239,9 @@ func fitLine(q CalibrationRequest) (*CalibrationResult, error) {
 	}
 	x := make([]float64, dim)
 	residual, rotation, cost := evaluate(x)
+	if residual == nil || !finite(cost) {
+		return nil, errors.New("starting pitch is outside the calibration search range; use a broad-ring profile with cleared pitch corrections")
+	}
 	lambda := .001
 	for iter := 0; iter < 65; iter++ {
 		jac := make([][]float64, dim)
@@ -286,11 +300,15 @@ func fitLine(q CalibrationRequest) (*CalibrationResult, error) {
 		return nil, errors.New("fit reached the 0.3 mm search limit; improve the broad-band measurements first")
 	}
 	actual, _ := NewGeometry(c)
+	if q.FitPitch && (math.Abs(c.PitchLinear) > .00495 || math.Abs(c.PitchQuadratic) > .00495 || math.Abs(c.PitchCubic) > .00495) {
+		return nil, errors.New("pitch fit reached its search boundary; check the trace, photo scale and coarse calibration")
+	}
 	result := &CalibrationResult{Geometry: c, Rotation: rotation, Warnings: warnings}
+	result.Diagnostics = angularDiagnostics(source, actual, radii[0], radii[n-1], rotation)
 	// Report local perpendicular distance to the predicted curve. This includes
 	// radial photo uncertainty without mislabelling radians as millimetres.
 	for i, r := range radii {
-		d := (linePhase(source, actual, r+.001) - linePhase(source, actual, r-.001)) / .002
+		d := (tracePhase(q, source, actual, r+.001) - tracePhase(q, source, actual, r-.001)) / .002
 		e := residual[i] * r / math.Hypot(1, r*d)
 		result.RMS += e * e
 		result.MaxError = math.Max(result.MaxError, math.Abs(e))
@@ -306,10 +324,13 @@ func fitLine(q CalibrationRequest) (*CalibrationResult, error) {
 		result.Warnings = append(result.Warnings, "Variable pitch adds three fitted parameters. Confirm the result with another line burn to check for overfitting.")
 	}
 	result.Warnings = append(result.Warnings, "A low residual does not prove the winding is correct. Follow the entire visible line without skipping turns, then verify on a new burn.")
+	if q.Mode == TrianglePattern {
+		result.Warnings = append(result.Warnings, "Photo rotation is a nuisance parameter, not a spindle-axis measurement. Start angle is unchanged; channel-bit length and physical eccentricity are not fitted.")
+	}
 	for r := radii[0]; r <= radii[n-1]; {
-		phase := linePhase(source, actual, r) + rotation
+		phase := tracePhase(q, source, actual, r) + rotation
 		result.Curve = append(result.Curve, Point{r * math.Cos(phase), r * math.Sin(phase)})
-		d := (linePhase(source, actual, r+.001) - linePhase(source, actual, r-.001)) / .002
+		d := (tracePhase(q, source, actual, r+.001) - tracePhase(q, source, actual, r-.001)) / .002
 		r += math.Min(.08, .05/math.Max(math.Abs(d), .001))
 		if len(result.Curve) > 20000 {
 			return nil, errors.New("fitted line has too many turns; improve the coarse calibration")

@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
-import {maxell,photoFrame,validGeometry,validateRecord,validateProfile,loadCalibration,bandFractions} from '../src/calibration.ts';
+import {maxell,photoFrame,validGeometry,validateRecord,validateProfile,loadCalibration,bandFractions,triangleShape,validDiagnostics} from '../src/calibration.ts';
 const record={kind:'dvd-art-calibration',version:1,id:'test',created:new Date().toISOString(),pattern:'bands',geometry:{...maxell},media:'Maxell DVD+R',burner:'Test',speed:'8x',radii:Array(6).fill(''),points:[],fitPitch:false};
 assert.ok(validateRecord(record));
+const triangleRecord={...record,pattern:'triangles-v1',triangleEdge:'clockwise'};
+assert.ok(validateRecord(triangleRecord));
+assert.ok(validateRecord({...triangleRecord,triangleEdge:'counterclockwise'}));
+assert.ok(!validateRecord({...triangleRecord,triangleEdge:undefined}));
+assert.ok(!validateRecord({...triangleRecord,geometry:{...maxell,outer:30}}));
+assert.deepEqual(triangleShape(maxell),{base:24.6,tip:57.4,halfBase:4});
+assert.ok(!validDiagnostics({stations:[]}));
 assert.ok(!validateRecord({...record,version:2}));
 assert.ok(!validateRecord({...record,points:[{x:NaN,y:0}]}));
 assert.ok(!validateRecord({...record,geometry:{...maxell,sectors:2295105}}));

@@ -9,15 +9,22 @@ const fitted=JSON.parse(dvdCalibrate(JSON.stringify({mode:'bands',basis:config,r
 assert.ok(Math.abs(fitted.geometry.inner-24.12)<1e-8);
 assert.ok(Math.abs(fitted.geometry.outer-57.94)<1e-8);
 assert.ok(dvdCalibrationStart(JSON.stringify({...config,outputSectors:32768}),'bands').error);
-for(const pattern of ['bands','line']){
+for(const pattern of ['bands','line','triangles-v1']){
  assert.equal(dvdCalibrationStart(JSON.stringify(config),pattern),true);
  const header=dvdChunk(16,1);assert.equal(new DataView(header.buffer).getUint32(80,true),config.sectors);
  assert.ok(dvdChunk(config.sectors-16,16) instanceof Uint8Array);dvdRelease();
 }
+const trianglePoints=Array.from({length:40},(_,i)=>{const x=25.2+31.8*i/39;return {x,y:4*(57.4-x)/32.8}});
+const triangleFit=JSON.parse(dvdCalibrate(JSON.stringify({mode:'triangles-v1',basis:config,triangleEdge:'clockwise',fitPitch:true,points:trianglePoints})));
+assert.ok(Math.abs(triangleFit.geometry.inner-config.inner)<1e-6);
+assert.ok(Math.abs(triangleFit.diagnostics.driftDegrees)<.001);
+assert.ok(dvdCalibrate(JSON.stringify({mode:'triangles-v1',basis:config,points:trianglePoints})).error);
 const size=128,pixels=new Uint8Array(size*size*4);for(let y=0;y<size;y++)for(let x=0;x<size;x++){const i=(y*size+x)*4;const v=(Math.floor(x/16)+Math.floor(y/16))%2?255:0;pixels.set([v,v,v,255],i)}
 const tone={brightness:0,contrast:1,gamma:1,threshold:.5,dither:false,invert:false};
 const count=process.argv.includes('--full')?config.sectors:32768;
-assert.equal(dvdStart(pixels,size,JSON.stringify(tone),JSON.stringify({...config,outputSectors:count})),true);
+const pattern=process.argv.find(a=>a.startsWith('--pattern='))?.split('=')[1];
+if(pattern)assert.equal(dvdCalibrationStart(JSON.stringify({...config,outputSectors:count}),pattern),true);
+else assert.equal(dvdStart(pixels,size,JSON.stringify(tone),JSON.stringify({...config,outputSectors:count})),true);
 const hash=createHash('sha256');const start=performance.now();let bytes=0;const save=process.env.TEST_ISO;const fd=save?openSync(save,'w'):null;
 for(let lba=0;lba<count;lba+=256){
  const data=dvdChunk(lba,Math.min(256,count-lba));assert.ok(data instanceof Uint8Array);
@@ -27,5 +34,5 @@ for(let lba=0;lba<count;lba+=256){
 }
 if(fd!==null)closeSync(fd);
 assert.equal(bytes,count*2048);assert.ok(dvdChunk(count,1).error);dvdRelease();
-console.log(JSON.stringify({bytes,sha256:hash.digest('hex'),seconds:((performance.now()-start)/1000).toFixed(2),wasmBytes:readFileSync('public/encoder.wasm').length}));
+console.log(JSON.stringify({pattern:pattern||'checkerboard',bytes,sha256:hash.digest('hex'),seconds:((performance.now()-start)/1000).toFixed(2),wasmBytes:readFileSync('public/encoder.wasm').length}));
 process.exit(0);

@@ -1,5 +1,6 @@
 import {Engine} from './engine';
 import type {Geometry,Tone} from './engine';
+import type {Pattern} from './calibration';
 export type ExportResult={url?:string;name:string;bytes:number;cleanup?:()=>Promise<void>};
 type Sink={write:(data:Uint8Array)=>Promise<void>;close:()=>Promise<void>;abort:()=>Promise<void>;finish:()=>Promise<ExportResult>};
 type SaveHandle={createWritable:()=>Promise<FileSystemWritableFileStream>};
@@ -29,7 +30,7 @@ export async function prepareExport(name:string,bytes:number,browserDownload=fal
   return {name,bytes,url,cleanup:async()=>{URL.revokeObjectURL(url);await cleanup()}};
  }};
 }
-export async function generate(engine:Engine,sink:Sink,pixels:ImageData|null,tone:Tone,config:Geometry,count:number,signal:AbortSignal,progress:(bytes:number)=>void,pattern?:'bands'|'line'){
+export async function generate(engine:Engine,sink:Sink,pixels:ImageData|null,tone:Tone,config:Geometry,count:number,signal:AbortSignal,progress:(bytes:number)=>void,pattern?:Pattern){
  try{
   if(signal.aborted)throw Error('Export cancelled');
   if(pattern)await engine.request('calibration-start',{config:{...config,outputSectors:count},pattern});

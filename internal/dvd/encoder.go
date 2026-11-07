@@ -105,6 +105,9 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 				if e.pattern == "line" {
 					dark = cosine > 0 && math.Abs(r*sine) < .6
 				}
+				if e.pattern == TrianglePattern {
+					dark = triangleDark(e.Config, r*cosine, r*sine)
+				}
 				if dark {
 					texture = 0xa5
 				}
