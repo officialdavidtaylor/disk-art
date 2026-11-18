@@ -46,3 +46,19 @@ assert.equal(readDiscSettings(JSON.stringify(modified),fallback,choices).preset,
 assert.equal(readDiscSettings(JSON.stringify(active),fallback,[]).geometry.inner,active.geometry.inner);
 assert.throws(()=>readDiscSettings(JSON.stringify({...active,geometry:{...maxell,inner:NaN}}),fallback,choices));
 console.log('Sweep record and active geometry persistence checks passed.');
+
+const {emptyStrata,verbatim95137}=await import('../src/calibration.ts');
+const strata={...record,pattern:'strata-v1',geometry:verbatim95137,strata:emptyStrata(),readCompatibility:'write-safe-light-v1'};
+assert.ok(validateRecord(strata));
+for(const patch of [{strata:undefined},{readCompatibility:'off'},{strata:{...emptyStrata(),halfRangePPM:999}},{strata:{...emptyStrata(),radii:['25','35','45','NaN']}}])assert.ok(!validateRecord({...strata,...patch}));
+const narrower={...strata,id:'next',parentId:strata.id,strata:emptyStrata(1000),geometry:{...verbatim95137,inner:24.01}};
+value=JSON.stringify({records:[strata,narrower],profiles:[]});const records=loadCalibration().records;
+assert.equal(records[0].geometry.inner,24);assert.equal(records[1].strata.halfRangePPM,1000);
+assert.equal(records[0].strata.radii[0],'');
+assert.ok(validateRecord({...strata,strata:emptyStrata(0)}));
+const cp={...active,readCompatibility:'write-safe-light-v1'};assert.deepEqual(readDiscSettings(JSON.stringify(cp),fallback,choices),cp);
+assert.throws(()=>readDiscSettings(JSON.stringify({...active,readCompatibility:'unknown'}),fallback,choices));
+assert.ok(validateProfile({...profile,stage:'strata-v1',record:strata,readCompatibility:'write-safe-light-v1'}));
+console.log('Four-stratum records, follow-up lineage and compatibility persistence checks passed.');
+assert.ok(!validateProfile({...profile,stage:'strata-v1',record:strata,readCompatibility:'off'}));
+assert.ok(!validateProfile({...profile,stage:'strata-v1',record:{...strata,strata:emptyStrata(0)},readCompatibility:'write-safe-light-v1'}));

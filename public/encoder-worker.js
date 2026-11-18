@@ -28,8 +28,10 @@ onmessage=({data})=>{
    let result;
    if(data.type==='load')result=true;
    else if(data.type==='preview')result=dvdPreview(new Uint8Array(data.pixels),data.size,JSON.stringify(data.tone));
-   else if(data.type==='start')result=dvdStart(new Uint8Array(data.pixels),data.size,JSON.stringify(data.tone),JSON.stringify(data.config));
-   else if(data.type==='calibration-start')result=dvdCalibrationStart(JSON.stringify(data.config),data.pattern);
+   else if(data.type==='start')result=dvdStart(new Uint8Array(data.pixels),data.size,JSON.stringify(data.tone),JSON.stringify(data.config),data.readCompatibility||'off');
+   else if(data.type==='calibration-start')result=data.pattern==='strata-v1'?dvdStrataStart(JSON.stringify({config:data.config,options:data.strata})):dvdCalibrationStart(JSON.stringify(data.config),data.pattern,data.readCompatibility||'off');
+   else if(data.type==='strata-plan'){result=dvdStrataPlan(JSON.stringify({config:data.config,options:data.options}));if(typeof result==='string')result=JSON.parse(result)}
+   else if(data.type==='strata-fit'){result=dvdStrataFit(JSON.stringify(data.request));if(typeof result==='string')result=JSON.parse(result)}
    else if(data.type==='sweep-plan'){result=dvdSweepPlan(JSON.stringify(data.config));if(typeof result==='string')result=JSON.parse(result)}
    else if(data.type==='sweep-fit'){result=dvdSweepFit(JSON.stringify(data.request));if(typeof result==='string')result=JSON.parse(result)}
    else if(data.type==='calibrate'){result=dvdCalibrate(JSON.stringify(data.request));if(typeof result==='string')result=JSON.parse(result)}

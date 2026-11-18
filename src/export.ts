@@ -1,6 +1,6 @@
 import {Engine} from './engine';
 import type {Geometry,Tone} from './engine';
-import type {Pattern} from './calibration';
+import type {Pattern,StrataSettings,ReadCompatibility} from './calibration';
 export type ExportResult={url?:string;name:string;bytes:number;cleanup?:()=>Promise<void>};
 type Sink={write:(data:Uint8Array)=>Promise<void>;close:()=>Promise<void>;abort:()=>Promise<void>;finish:()=>Promise<ExportResult>};
 type SaveHandle={createWritable:()=>Promise<FileSystemWritableFileStream>};
@@ -30,11 +30,11 @@ export async function prepareExport(name:string,bytes:number,browserDownload=fal
   return {name,bytes,url,cleanup:async()=>{URL.revokeObjectURL(url);await cleanup()}};
  }};
 }
-export async function generate(engine:Engine,sink:Sink,pixels:ImageData|null,tone:Tone,config:Geometry,count:number,signal:AbortSignal,progress:(bytes:number)=>void,pattern?:Pattern){
+export async function generate(engine:Engine,sink:Sink,pixels:ImageData|null,tone:Tone,config:Geometry,count:number,signal:AbortSignal,progress:(bytes:number)=>void,pattern?:Pattern,strata?:StrataSettings,readCompatibility:ReadCompatibility='off'){
  try{
   if(signal.aborted)throw Error('Export cancelled');
-  if(pattern)await engine.request('calibration-start',{config:{...config,outputSectors:count},pattern});
-  else {if(!pixels)throw Error('Missing artwork');const raw=pixels.data.buffer;await engine.request('start',{pixels:raw,size:pixels.width,tone,config:{...config,outputSectors:count}},[raw]);}
+  if(pattern)await engine.request('calibration-start',{config:{...config,outputSectors:count},pattern,strata,readCompatibility});
+  else {if(!pixels)throw Error('Missing artwork');const raw=pixels.data.buffer;await engine.request('start',{pixels:raw,size:pixels.width,tone,config:{...config,outputSectors:count},readCompatibility},[raw]);}
   for(let start=0;start<count;start+=256){
    if(signal.aborted)throw Error('Export cancelled');
    const chunk=await engine.request<Uint8Array>('chunk',{start,count:Math.min(256,count-start)});

@@ -25,13 +25,14 @@ func makeMasks() (out [16][SectorBytes]byte) {
 func ScramblerMask(lba uint32) [SectorBytes]byte { return masks[((lba+0x30000)>>4)&15] }
 
 type Encoder struct {
-	Config   Config
-	geometry *Geometry
-	image    []byte
-	size     int
-	prefix   []byte
-	pattern  string
-	sweep    []SweepBand
+	Config        Config
+	geometry      *Geometry
+	image         []byte
+	size          int
+	prefix        []byte
+	pattern       string
+	sweep         []SweepBand
+	compatibility bool
 }
 
 func NewEncoder(c Config, gray []byte, size int) (*Encoder, error) {
@@ -47,6 +48,14 @@ func NewEncoder(c Config, gray []byte, size int) (*Encoder, error) {
 		volume = c.Sectors
 	}
 	return &Encoder{Config: c, geometry: g, image: gray, size: size, prefix: ISOPrefix(volume)}, nil
+}
+
+func (e *Encoder) SetCompatibility(recipe string) error {
+	if recipe != "off" && recipe != WriteSafeLight {
+		return errors.New("unknown compatibility encoding recipe")
+	}
+	e.compatibility = recipe == WriteSafeLight
+	return nil
 }
 
 func (e *Encoder) Fill(start uint32, out []byte) error {
@@ -75,16 +84,24 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 				}
 			}
 			for i := range dst {
-				dst[i] = texture ^ mask[i]
+				q := texture
+				if e.compatibility {
+					q = lightCompatible(q, i)
+				}
+				dst[i] = q ^ mask[i]
 			}
 			continue
 		}
 		var band *SweepBand
-		if e.pattern == SweepPattern {
+		if e.pattern == SweepPattern || e.pattern == StrataPattern {
 			band = sweepBandAt(e.sweep, lba)
 			if band == nil {
 				for i := range dst {
-					dst[i] = 0x92 ^ mask[i]
+					q := byte(0x92)
+					if e.compatibility {
+						q = lightCompatible(q, i)
+					}
+					dst[i] = q ^ mask[i]
 				}
 				continue
 			}
@@ -105,8 +122,9 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 			r, angle := e.geometry.Polar(channel)
 			rate := 1.0
 			if band != nil {
-				rate = band.Rate
-				angle += (rate - 1) * (angle - band.anchor)
+				delta := angle - band.anchor
+				rate = band.Rate + band.slope*delta
+				angle += (band.Rate-1)*delta + .5*band.slope*delta*delta
 			}
 			sine, cosine := math.Sincos(angle)
 			stepArc := 16 * e.Config.BitLength * 1e-6
@@ -129,6 +147,9 @@ func (e *Encoder) Fill(start uint32, out []byte) error {
 				}
 				if dark {
 					texture = 0xa5
+				}
+				if e.compatibility {
+					texture = lightCompatible(texture, i+j)
 				}
 				dst[i+j] = texture ^ mask[i+j]
 				cosine, sine = cosine*dc-sine*ds, sine*dc+cosine*ds

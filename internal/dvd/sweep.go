@@ -20,6 +20,7 @@ type SweepBand struct {
 	Outer     float64 `json:"outer"`
 	Rate      float64 `json:"rate"`
 	anchor    float64
+	slope     float64
 }
 
 type SweepPlan struct {
@@ -59,7 +60,7 @@ func NewSweepPlan(c Config) (*SweepPlan, error) {
 			outer, _ := g.Polar(float64(end) * ChannelBitsPerSector)
 			_, anchor := g.Polar(float64(start+end) / 2 * ChannelBitsPerSector)
 			ppm := (i - 10) * 1000
-			p.Bands = append(p.Bands, SweepBand{zone + 1, i + 1, ppm, start, end, inner, outer, 1 + float64(ppm)/1e6, anchor})
+			p.Bands = append(p.Bands, SweepBand{Zone: zone + 1, Candidate: i + 1, PPM: ppm, Start: start, End: end, Inner: inner, Outer: outer, Rate: 1 + float64(ppm)/1e6, anchor: anchor})
 		}
 	}
 	return p, nil

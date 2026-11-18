@@ -27,6 +27,14 @@ is derived from user-supplied Maxell / GP60NB50 / 4x ring measurements. The
 versioned angular-rate sweep pattern and its radius fitter were implemented
 for this application.
 
+The write-safe-light-v1 compatibility substitutions are adapted from
+DiscImageStudio PR #188 and src/DvdImageSolver/Solver/DvdReadCompatibilityGuard.cs,
+reference merge commit 78258ae468760c61f61d132c94b09af562dddbc4:
+https://github.com/JiaFeiMiao-K-Cat/DiscImageStudio/pull/188
+Copyright DiscImageStudio authors and contributors, GPL-3.0-or-later.
+The four-stratum continuous rate sweep and stationary-point fitter are original
+implementations for this application. Verbatim 95137 geometry is provisional.
+
 This application is distributed under GPL-3.0-or-later. See LICENSE.
 Corresponding source: https://github.com/officialdavidtaylor/disk-art
 

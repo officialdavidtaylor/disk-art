@@ -1,5 +1,20 @@
 [
   {
+    "id": "verbatim-dvd-r-95137-nominal",
+    "name": "Verbatim DVD\u2212R \u00b7 95137 printable \u00b7 provisional",
+    "measured": false,
+    "geometry": {
+      "sectors": 2297888,
+      "inner": 24,
+      "outer": 58,
+      "bitLength": 133.3,
+      "pitchLinear": 0,
+      "pitchQuadratic": 0,
+      "pitchCubic": 0,
+      "startAngle": 0
+    }
+  },
+  {
     "id": "maxell-dvd-plus-r-nominal",
     "name": "Maxell DVD+R \u00b7 nominal / calibrate first",
     "measured": false,

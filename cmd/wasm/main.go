@@ -37,6 +37,55 @@ func process(a []js.Value) ([]byte, int, error) {
 	return gray, size, err
 }
 func main() {
+	bind("dvdStrataPlan", func(a []js.Value) any {
+		var q struct {
+			Config  dvd.Config        `json:"config"`
+			Options dvd.StrataOptions `json:"options"`
+		}
+		if err := json.Unmarshal([]byte(a[0].String()), &q); err != nil {
+			return fail(err)
+		}
+		p, err := dvd.NewStrataPlan(q.Config, q.Options)
+		if err != nil {
+			return fail(err)
+		}
+		data, err := json.Marshal(p)
+		if err != nil {
+			return fail(err)
+		}
+		return string(data)
+	})
+	bind("dvdStrataFit", func(a []js.Value) any {
+		var q dvd.StrataFitRequest
+		if err := json.Unmarshal([]byte(a[0].String()), &q); err != nil {
+			return fail(err)
+		}
+		p, err := dvd.FitStrata(q)
+		if err != nil {
+			return fail(err)
+		}
+		data, err := json.Marshal(p)
+		if err != nil {
+			return fail(err)
+		}
+		return string(data)
+	})
+	bind("dvdStrataStart", func(a []js.Value) any {
+		encoder = nil
+		var q struct {
+			Config  dvd.Config        `json:"config"`
+			Options dvd.StrataOptions `json:"options"`
+		}
+		if err := json.Unmarshal([]byte(a[0].String()), &q); err != nil {
+			return fail(err)
+		}
+		var err error
+		encoder, err = dvd.NewStrataEncoder(q.Config, q.Options)
+		if err != nil {
+			return fail(err)
+		}
+		return true
+	})
 	bind("dvdSweepPlan", func(a []js.Value) any {
 		var c dvd.Config
 		if err := json.Unmarshal([]byte(a[0].String()), &c); err != nil {
@@ -78,6 +127,12 @@ func main() {
 		if err != nil {
 			return fail(err)
 		}
+		if len(a) > 2 {
+			if err = encoder.SetCompatibility(a[2].String()); err != nil {
+				encoder = nil
+				return fail(err)
+			}
+		}
 		return true
 	})
 	bind("dvdCalibrate", func(a []js.Value) any {
@@ -117,6 +172,12 @@ func main() {
 		encoder, err = dvd.NewEncoder(c, gray, size)
 		if err != nil {
 			return fail(err)
+		}
+		if len(a) > 4 {
+			if err = encoder.SetCompatibility(a[4].String()); err != nil {
+				encoder = nil
+				return fail(err)
+			}
 		}
 		return true
 	})

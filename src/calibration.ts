@@ -1,17 +1,26 @@
 import type {Geometry} from './engine';
-export type Pattern='bands'|'line'|'triangles-v1'|'sweep-v1';
+export type Pattern='bands'|'line'|'triangles-v1'|'sweep-v1'|'strata-v1';
 export type TriangleEdge='clockwise'|'counterclockwise';
 export type AngularDiagnostics={innerDeltaMM:number;outerDeltaMM:number;driftDegrees:number;peakToPeakDegrees:number;innerPitchNM:number;outerPitchNM:number;photoRotationDegrees:number;stations:{radius:number;degrees:number}[]};
-export const patternName=(p:Pattern)=>p==='sweep-v1'?'Coarse angular sweep':p==='bands'?'Broad rings':p==='triangles-v1'?'Triangle spokes':'Single line';
+export const patternName=(p:Pattern)=>p==='strata-v1'?'Four broad strata':p==='sweep-v1'?'Coarse angular sweep':p==='bands'?'Broad rings':p==='triangles-v1'?'Triangle spokes':'Single line';
 export const triangleShape=(g:Geometry)=>({base:g.inner+.6,tip:g.outer-.6,halfBase:4});
 export type Point={x:number;y:number};
 export type Fit={geometry:Geometry;rms:number;maxError:number;rotation:number;warnings:string[];curve?:Point[];diagnostics?:AngularDiagnostics};
-export type BurnRecord={kind:'dvd-art-calibration';version:1;id:string;created:string;pattern:Pattern;geometry:Geometry;media:string;burner:string;speed:string;exportedAt?:string;radii:string[];points:Point[];fitPitch:boolean;triangleEdge?:TriangleEdge;baselineId?:string;sweep?:SweepMeasurements};
-export type Profile={kind:'dvd-art-profile';version:1;id:string;name:string;created:string;geometry:Geometry;media:string;burner:string;speed:string;stage:Pattern;rms?:number;angularRmsDegrees?:number;record:BurnRecord;diagnostics?:AngularDiagnostics};
+export type BurnRecord={kind:'dvd-art-calibration';version:1;id:string;created:string;pattern:Pattern;geometry:Geometry;media:string;burner:string;speed:string;exportedAt?:string;radii:string[];points:Point[];fitPitch:boolean;triangleEdge?:TriangleEdge;baselineId?:string;parentId?:string;readCompatibility?:ReadCompatibility;strata?:StrataSettings;sweep?:SweepMeasurements};
+export type Profile={kind:'dvd-art-profile';version:1;id:string;name:string;created:string;geometry:Geometry;media:string;burner:string;speed:string;stage:Pattern;rms?:number;angularRmsDegrees?:number;readCompatibility?:ReadCompatibility;record:BurnRecord;diagnostics?:AngularDiagnostics};
 export type CalibrationStore={records:BurnRecord[];profiles:Profile[]};
 export const storageKey='dvd-art-calibration-v1';
 export const edgeLabels=['Band 1 · inner edge','Band 1 · outer edge','Band 2 · inner edge','Band 2 · outer edge','Band 3 · inner edge','Band 3 · outer edge'];
 export const maxell:Geometry={sectors:2295104,inner:24,outer:58,bitLength:133.3,pitchLinear:0,pitchQuadratic:0,pitchCubic:0,startAngle:0};
+export const verbatim95137:Geometry={...maxell,sectors:2297888};
+export type ReadCompatibility='off'|'write-safe-light-v1';
+export const validCompatibility=(v:unknown)=>v===undefined||v==='off'||v==='write-safe-light-v1';
+export type StrataSettings={halfRangePPM:number;readCompatibility:'write-safe-light-v1';radii:string[];confirmed:boolean};
+export const emptyStrata=(halfRangePPM=10000):StrataSettings=>({halfRangePPM,readCompatibility:'write-safe-light-v1',radii:Array(4).fill(''),confirmed:false});
+export function validStrata(v:unknown):v is StrataSettings {
+ if(!v||typeof v!=='object')return false;const s=v as StrataSettings;
+ return [0,100,1000,10000].includes(s.halfRangePPM)&&s.readCompatibility==='write-safe-light-v1'&&typeof s.confirmed==='boolean'&&Array.isArray(s.radii)&&s.radii.length===4&&s.radii.every(r=>typeof r==='string'&&r.length<30&&(r===''||r.trim()!==''&&Number.isFinite(Number(r))&&Number(r)>=20&&Number(r)<=59));
+}
 export const bandFractions=(sectors:number)=>[35,170,305,510,705,955].map(p=>Math.ceil(sectors*p/1000)/sectors);
 export function validGeometry(value:unknown):value is Geometry{
  if(!value||typeof value!=='object')return false;
@@ -21,11 +30,11 @@ export function validGeometry(value:unknown):value is Geometry{
 const string=(v:unknown,max=160)=>typeof v==='string'&&v.length<=max;
 export function validateRecord(v:unknown):v is BurnRecord{
  if(!v||typeof v!=='object')return false;const r=v as BurnRecord;
- return r.kind==='dvd-art-calibration'&&r.version===1&&string(r.id)&&string(r.created)&&!Number.isNaN(Date.parse(r.created))&&(r.baselineId===undefined||string(r.baselineId))&&(r.pattern==='bands'||r.pattern==='line'||(r.pattern==='sweep-v1'&&r.geometry?.outer-r.geometry?.inner>=28&&validSweepMeasurements(r.sweep))||(r.pattern==='triangles-v1'&&(r.triangleEdge==='clockwise'||r.triangleEdge==='counterclockwise')&&r.geometry?.outer-r.geometry?.inner>=10))&&validGeometry(r.geometry)&&string(r.media)&&string(r.burner)&&string(r.speed)&&Array.isArray(r.radii)&&r.radii.length===6&&r.radii.every(x=>string(x,30))&&Array.isArray(r.points)&&r.points.length<=2000&&r.points.every(p=>p&&typeof p.x==='number'&&typeof p.y==='number'&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Math.hypot(p.x,p.y)<=65)&&typeof r.fitPitch==='boolean';
+ return r.kind==='dvd-art-calibration'&&r.version===1&&string(r.id)&&string(r.created)&&!Number.isNaN(Date.parse(r.created))&&(r.baselineId===undefined||string(r.baselineId))&&(r.parentId===undefined||string(r.parentId))&&validCompatibility(r.readCompatibility)&&(r.pattern==='bands'||r.pattern==='line'||(r.pattern==='strata-v1'&&r.geometry?.outer-r.geometry?.inner>=28&&validStrata(r.strata)&&r.readCompatibility==='write-safe-light-v1')||(r.pattern==='sweep-v1'&&r.geometry?.outer-r.geometry?.inner>=28&&validSweepMeasurements(r.sweep))||(r.pattern==='triangles-v1'&&(r.triangleEdge==='clockwise'||r.triangleEdge==='counterclockwise')&&r.geometry?.outer-r.geometry?.inner>=10))&&validGeometry(r.geometry)&&string(r.media)&&string(r.burner)&&string(r.speed)&&Array.isArray(r.radii)&&r.radii.length===6&&r.radii.every(x=>string(x,30))&&Array.isArray(r.points)&&r.points.length<=2000&&r.points.every(p=>p&&typeof p.x==='number'&&typeof p.y==='number'&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Math.hypot(p.x,p.y)<=65)&&typeof r.fitPitch==='boolean';
 }
 export function validateProfile(v:unknown):v is Profile{
  if(!v||typeof v!=='object')return false;const p=v as Profile;
- return p.kind==='dvd-art-profile'&&p.version===1&&string(p.id)&&string(p.name)&&string(p.created)&&string(p.media)&&string(p.burner)&&string(p.speed)&&validGeometry(p.geometry)&&(p.stage==='bands'||p.stage==='line'||p.stage==='triangles-v1'||p.stage==='sweep-v1')&&(p.stage==='sweep-v1'?typeof p.angularRmsDegrees==='number'&&Number.isFinite(p.angularRmsDegrees)&&p.angularRmsDegrees>=0:typeof p.rms==='number'&&Number.isFinite(p.rms)&&p.rms>=0)&&validateRecord(p.record)&&(p.diagnostics===undefined||validDiagnostics(p.diagnostics));
+ return p.kind==='dvd-art-profile'&&p.version===1&&string(p.id)&&string(p.name)&&string(p.created)&&string(p.media)&&string(p.burner)&&string(p.speed)&&validGeometry(p.geometry)&&(p.stage==='bands'||p.stage==='line'||p.stage==='triangles-v1'||p.stage==='sweep-v1'||p.stage==='strata-v1')&&validCompatibility(p.readCompatibility)&&(p.stage!=='strata-v1'||(p.readCompatibility==='write-safe-light-v1'&&p.record?.pattern==='strata-v1'&&(p.record.strata?.halfRangePPM??0)>0))&&(p.stage==='sweep-v1'?typeof p.angularRmsDegrees==='number'&&Number.isFinite(p.angularRmsDegrees)&&p.angularRmsDegrees>=0:typeof p.rms==='number'&&Number.isFinite(p.rms)&&p.rms>=0)&&validateRecord(p.record)&&(p.diagnostics===undefined||validDiagnostics(p.diagnostics));
 }
 
 export function validDiagnostics(v:unknown):v is AngularDiagnostics{
