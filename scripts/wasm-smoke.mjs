@@ -27,6 +27,21 @@ for(const halfRangePPM of [10000,1000,100,0]){
  assert.ok(dvdStrataFit(JSON.stringify({basis:strataConfig,options,radii:[],confirmed:false})).error);
 }
 assert.ok(dvdStrataStart(JSON.stringify({config:{...strataConfig,outputSectors:32768},options:{halfRangePPM:10000,readCompatibility:'write-safe-light-v1'}})).error);
+// Exercise the actual photo-derived verification geometry through the encoder.
+const photoProfile=JSON.parse(readFileSync('src/baselines/verbatim-5317b6a2.json','utf8'));
+const verificationOptions={halfRangePPM:0,readCompatibility:'write-safe-light-v1'};
+const verificationPlan=JSON.parse(dvdStrataPlan(JSON.stringify({config:photoProfile.geometry,options:verificationOptions})));
+assert.equal(verificationPlan.bands.length,4);
+assert.equal(dvdStrataStart(JSON.stringify({config:photoProfile.geometry,options:verificationOptions})),true);
+assert.equal(new DataView(dvdChunk(0,32).buffer).getUint32(16*2048+80,true),2297888);
+for(const band of verificationPlan.bands){
+ assert.ok(band.fromPPM===0&&band.toPPM===0);
+ for(const lba of [band.start-1,band.start,Math.floor((band.start+band.end)/2),band.end-1,band.end]){
+  const chunk=dvdChunk(lba,16);assert.ok(chunk instanceof Uint8Array);
+  assert.deepEqual(chunk.slice(0,2048),dvdChunk(lba,1));
+ }
+}
+assert.ok(dvdChunk(2297888-16,16) instanceof Uint8Array);dvdRelease();
 const radii=[35,170,305,510,705,955].map(p=>Math.sqrt(24.12**2+(57.94**2-24.12**2)*Math.ceil(config.sectors*p/1000)/config.sectors));
 const fitted=JSON.parse(dvdCalibrate(JSON.stringify({mode:'bands',basis:config,radii})));
 assert.ok(Math.abs(fitted.geometry.inner-24.12)<1e-8);

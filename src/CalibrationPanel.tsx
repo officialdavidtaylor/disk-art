@@ -2,14 +2,16 @@ import {useEffect,useRef,useState} from 'react';
 import type {MouseEvent as ReactMouseEvent} from 'react';
 import {ArrowDownToLine,Check,Disc3,Download,FolderOpen,Plus,RotateCcw,Target,Upload} from 'lucide-react';
 import type {Engine,Geometry} from './engine';
-import {bandFractions,emptySweep,emptyStrata,verbatim95137,edgeLabels,maxell,patternName,photoFrame,saveJSON,saveTriangleTarget,triangleShape,validGeometry,validateProfile,validateRecord} from './calibration';
+import {bandFractions,emptySweep,emptyStrata,strataFollowup,verbatim95137,edgeLabels,maxell,patternName,photoFrame,saveJSON,saveTriangleTarget,triangleShape,validGeometry,validateProfile,validateRecord} from './calibration';
 import type {BurnRecord,CalibrationStore,Fit,Pattern,Point,Profile,TriangleEdge,ReadCompatibility} from './calibration';
 
 import AngularResult from './AngularResult';
 import SweepPanel from './SweepPanel';
 import StrataPanel,{strataRange} from './StrataPanel';
 import baselineData from './baselines/maxell-e3ff7e7e.json';
+import photoBaselineData from './baselines/verbatim-5317b6a2.json';
 const sweepBaseline=baselineData as Profile;
+const photoBaseline=photoBaselineData as Profile;
 
 
 type Props={geometry:Geometry;readCompatibility:ReadCompatibility;engine:Engine|null;ready:boolean;busy:boolean;store:CalibrationStore;setStore:(store:CalibrationStore)=>void;onExport:(record:BurnRecord)=>Promise<boolean>;onApply:(profile:Profile)=>void;onError:(error:string)=>void;browserDownload:boolean;setBrowserDownload:(value:boolean)=>void};
@@ -90,8 +92,8 @@ export default function Calibration({geometry,readCompatibility,engine,ready,bus
   setStore({...store,records:[...store.records,r].slice(-40)});setSelected(r.id);setPattern('strata-v1');setBasis('strata-baseline');setStrataHalfRange(10000);setMedia(r.media);setBurner(r.burner);setSpeed(r.speed);
  }
  function nextStrata(p:Profile,range:number){
-  const r:BurnRecord={...structuredClone(p.record),id:crypto.randomUUID().slice(0,8),created:new Date().toISOString(),geometry:{...p.geometry},parentId:p.record.id,baselineId:p.id,strata:emptyStrata(range),exportedAt:undefined};
-  setStore({...store,records:[...store.records,r].slice(-40),profiles:[...store.profiles,p].slice(-40)});onApply(p);scrollToSweep.current=true;setSelected(r.id);setBasis('current');setPattern('strata-v1');setStrataHalfRange(range);setMedia(r.media);setBurner(r.burner);setSpeed(r.speed);
+  const r=strataFollowup(p,range,crypto.randomUUID().slice(0,8),new Date().toISOString());
+  setStore({...store,records:[...store.records,r].slice(-40),profiles:[...store.profiles.filter(existing=>existing.id!==p.id),structuredClone(p)].slice(-40)});onApply(p);scrollToSweep.current=true;setSelected(r.id);setBasis('current');setPattern('strata-v1');setStrataHalfRange(range);setMedia(r.media);setBurner(r.burner);setSpeed(r.speed);
  }
  function prepareSweep(){
   scrollToSweep.current=true;
@@ -131,6 +133,7 @@ export default function Calibration({geometry,readCompatibility,engine,ready,bus
  const allRadii=record?.radii.every(v=>v.trim()!==''&&Number.isFinite(Number(v)));
  return <section className="calibration" aria-label="Disc calibration">
   <div className="cal-intro"><div><div className="eyebrow">A FIT FOR YOUR BURNER & YOUR BLANKS</div><h2>Find your disc’s geometry.</h2><p>Start with four broad strata. Narrow the angular search, then verify with a fresh burn. Keep a profile for this burner, media batch and write speed.</p></div><Target size={42} strokeWidth={1.2}/></div>
+  <div className="cal-card sweep-start" id="photo-verification"><div><div className="eyebrow">NEXT VERIFICATION · VERBATIM 95137 · GP60NB50 · 4×</div><h3>Refined from your verification photos</h3><p>Photo refinement 1 fits the curved boundaries on disc <strong>5317b6a2</strong> using two opposite edges and variable pitch. The next test keeps four broad strata, zero sweep and light compatibility encoding.</p><p className="cal-hint">Fit residual: {photoBaseline.rms!.toFixed(3)} mm RMS. This is a candidate correction; verify straight edges on a fresh disc before artwork. Preparing it saves and applies the profile and creates a new burn record.</p></div><div className="cal-actions"><button className="cal-primary" disabled={disabled} onClick={()=>nextStrata(photoBaseline,0)}><Plus size={15}/>Prepare refined verification</button><button className="small-button" disabled={disabled} onClick={()=>saveJSON(photoBaseline)}><Download size={14}/>Download refined profile</button></div></div>
   <div className="cal-card sweep-start"><div><div className="eyebrow">VERBATIM 95137 · DVD−R · 4×</div><h3>Four broad strata</h3><p>A fresh provisional baseline for your new printable discs. Four wide regions, gradual angular-rate sweeps, and light compatibility encoding. Start wide, measure, then narrow or verify.</p></div><button className="cal-primary" disabled={disabled} onClick={prepareStrata}><Plus size={15}/>Prepare Verbatim four-stratum test</button></div>
   <details className="legacy-calibration"><summary>Previous Maxell setup</summary><div className="cal-card sweep-start"><div><div className="eyebrow">NEXT MAXELL TEST · 4×</div><h3>Coarse angular sweep</h3><p>Use the measured e3ff7e7e baseline: <strong>24.017791–57.823139 mm</strong>, GP60NB50, 2,295,104 sectors. A new record freezes these settings, independently of the artwork preset.</p></div><button className="cal-primary" disabled={disabled} onClick={prepareSweep}><Plus size={15}/>Prepare Maxell sweep</button></div></details>
   <fieldset disabled={disabled}>
@@ -171,7 +174,7 @@ export default function Calibration({geometry,readCompatibility,engine,ready,bus
    </div>
   </>}
   {notice&&<p className="cal-notice" role="status">{notice}</p>}
-  {store.profiles.length>0&&<div className="cal-card"><div className="cal-heading"><Disc3 size={23}/><div><h3>Your saved profiles</h3><p>Keeps the 40 most recent profiles and burn records in this browser. Export JSON backups to keep them.</p></div></div><div className="profile-list">{[...store.profiles].reverse().map(p=><div key={p.id}><div><strong>{p.name}</strong><span>{p.stage==='strata-v1'?'Four-stratum fit · needs physical verification':p.stage==='sweep-v1'?'Sweep radii · verify before artwork':p.stage==='bands'?'Coarse · needs angular refinement':p.stage==='triangles-v1'?'Triangle fitted · verify with another burn':'Line fitted · verify with another burn'} · {p.burner||'Burner unspecified'} · {p.speed||'Speed unspecified'}</span></div><button className="small-button" onClick={()=>{onApply(p);setBasis('current');setPattern(p.stage==='strata-v1'?'strata-v1':'triangles-v1');setMedia(p.media);setBurner(p.burner);setSpeed(p.speed);setStrataHalfRange(p.stage==='strata-v1'?Math.max(100,(p.record.strata?.halfRangePPM??10000)/10):10000);setNotice('Applied '+p.name+' to artwork and the current starting geometry.')}}>Apply</button><button className="small-button" aria-label={'Export profile '+p.name} onClick={()=>saveJSON(p)}><Download size={14}/>Export</button></div>)}</div></div>}
+  {store.profiles.length>0&&<div className="cal-card"><div className="cal-heading"><Disc3 size={23}/><div><h3>Your saved profiles</h3><p>Keeps the 40 most recent profiles and burn records in this browser. Export JSON backups to keep them.</p></div></div><div className="profile-list">{[...store.profiles].reverse().map(p=><div key={p.id}><div><strong>{p.name}</strong><span>{p.fitMethod==='verification-edges-v1'?'Photo refinement · needs physical verification':p.stage==='strata-v1'?'Four-stratum fit · needs physical verification':p.stage==='sweep-v1'?'Sweep radii · verify before artwork':p.stage==='bands'?'Coarse · needs angular refinement':p.stage==='triangles-v1'?'Triangle fitted · verify with another burn':'Line fitted · verify with another burn'} · {p.burner||'Burner unspecified'} · {p.speed||'Speed unspecified'}</span></div><button className="small-button" onClick={()=>{onApply(p);setBasis('current');setPattern(p.stage==='strata-v1'?'strata-v1':'triangles-v1');setMedia(p.media);setBurner(p.burner);setSpeed(p.speed);setStrataHalfRange(p.fitMethod==='verification-edges-v1'?0:p.stage==='strata-v1'?Math.max(100,(p.record.strata?.halfRangePPM??10000)/10):10000);setNotice('Applied '+p.name+' to artwork and the current starting geometry.')}}>Apply</button><button className="small-button" aria-label={'Export profile '+p.name} onClick={()=>saveJSON(p)}><Download size={14}/>Export</button></div>)}</div></div>}
   </fieldset>
   <p className="cal-footnote">Calibration is specific to the burner, media batch and speed. After applying a fit, use constant-rate verification or a triangle/line burn; straight edges are the physical check. Channel-bit length stays fixed. Start-angle rotation does not correct spiral distortion. Based on the <a href="https://github.com/JiaFeiMiao-K-Cat/DiscImageStudio/blob/main/docs/CALIBRATION.md" target="_blank" rel="noreferrer">DiscImageStudio calibration approach</a>.</p>
  </section>;

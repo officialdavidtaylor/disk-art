@@ -26,7 +26,7 @@ export default function App(){
  const [source,setSource]=useState(()=>({image:sampleArtwork() as CanvasImageSource,width:1600,height:1600,name:'Contour study',sample:true}));
  const [placement,setPlacement]=useState<Placement>(initialPlacement);
  const [tone,setTone]=useState<Tone>(initialTone);
- const [view,setView]=useState<'artwork'|'calibration'>(['sweep','strata'].includes(new URLSearchParams(window.location.search).get('calibration')??'')?'calibration':'artwork');
+ const [view,setView]=useState<'artwork'|'calibration'>(['sweep','strata','verification'].includes(new URLSearchParams(window.location.search).get('calibration')??'')?'calibration':'artwork');
  const [saved]=useState(()=>{try{return {data:loadCalibration(),error:''}}catch(e){return {data:{records:[],profiles:[]} as CalibrationStore,error:(e as Error).message}}});
  const [calibration,setCalibration]=useState<CalibrationStore>(saved.data);
  const [exportBytes,setExportBytes]=useState(0);

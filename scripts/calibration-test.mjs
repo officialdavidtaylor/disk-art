@@ -62,3 +62,28 @@ assert.ok(validateProfile({...profile,stage:'strata-v1',record:strata,readCompat
 console.log('Four-stratum records, follow-up lineage and compatibility persistence checks passed.');
 assert.ok(!validateProfile({...profile,stage:'strata-v1',record:strata,readCompatibility:'off'}));
 assert.ok(!validateProfile({...profile,stage:'strata-v1',record:{...strata,strata:emptyStrata(0)},readCompatibility:'write-safe-light-v1'}));
+
+const {readFileSync}=await import('node:fs');
+const {strataFollowup}=await import('../src/calibration.ts');
+const refined=JSON.parse(readFileSync(new URL('../src/baselines/verbatim-5317b6a2.json',import.meta.url),'utf8'));
+assert.ok(validateProfile(refined));
+for(const patch of [{fitMethod:undefined},{fitMethod:'unknown'},{diagnostics:undefined},{record:{...refined.record,points:[]}},{record:{...refined.record,strata:emptyStrata(100)}}])assert.ok(!validateProfile({...refined,...patch}));
+const frozen=JSON.stringify(refined);
+const verification=strataFollowup(refined,0,'verification-test',record.created);
+assert.ok(validateRecord(verification));
+assert.deepEqual(verification.geometry,refined.geometry);
+assert.equal(verification.parentId,'5317b6a2');
+assert.equal(verification.baselineId,refined.id);
+assert.equal(verification.strata.halfRangePPM,0);
+assert.equal(verification.readCompatibility,'write-safe-light-v1');
+assert.equal(verification.geometry.sectors*2048,4706074624);
+assert.deepEqual(verification.points,[]);
+assert.ok(verification.radii.every(r=>r===''));
+assert.equal(verification.fitPitch,false);
+assert.equal(verification.exportedAt,undefined);
+verification.geometry.inner=24;verification.strata.radii[0]='28';
+assert.equal(JSON.stringify(refined),frozen);
+assert.throws(()=>strataFollowup(refined,999,'bad',record.created));
+value=JSON.stringify({records:[strata,refined.record],profiles:[profile,refined]});
+assert.equal(loadCalibration().profiles[1].fitMethod,'verification-edges-v1');
+console.log('Photo refinement, frozen source geometry, clean verification and storage round-trip checks passed.');

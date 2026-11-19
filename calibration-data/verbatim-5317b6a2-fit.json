@@ -1,0 +1,39 @@
+{
+  "sourceRecordId": "5317b6a2",
+  "profileId": "photo-5317b6a2-v1",
+  "fitImages": [
+    "IMG_8950.HEIC",
+    "IMG_8951.HEIC"
+  ],
+  "holdoutImage": "IMG_8949.HEIC",
+  "sampleCount": 133,
+  "radiusRangeMM": [
+    25.7,
+    56.3
+  ],
+  "constantPitchRMSMM": 0.2126273223740358,
+  "variablePitchRMSMM": 0.0320608589989867,
+  "maxErrorMM": 0.08847730931304022,
+  "validation": [
+    {
+      "image": "IMG_8950.HEIC",
+      "usedForFit": true,
+      "rmsDegrees": 0.06722873954830451,
+      "maxDegrees": 0.26009989494661895
+    },
+    {
+      "image": "IMG_8951.HEIC",
+      "usedForFit": true,
+      "rmsDegrees": 0.06341673586109456,
+      "maxDegrees": 0.15145982518591755
+    },
+    {
+      "image": "IMG_8949.HEIC",
+      "usedForFit": false,
+      "rmsDegrees": 0.05039746313609167,
+      "maxDegrees": 0.13622643701485038
+    }
+  ],
+  "method": "Average opposite-edge angles in each independently rectified image, remove one constant rotation per image, then average the two training images. Fit inner/outer radii and cubic pitch with Go/WASM. Check the held-out image after removing only its constant rotation.",
+  "limits": "Approximate planar rectification; no calibrated lens/refraction model. Residuals measure agreement with traced edges, not absolute accuracy or disc-to-disc repeatability. New physical verification required."
+}

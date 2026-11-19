@@ -7,7 +7,7 @@ export const triangleShape=(g:Geometry)=>({base:g.inner+.6,tip:g.outer-.6,halfBa
 export type Point={x:number;y:number};
 export type Fit={geometry:Geometry;rms:number;maxError:number;rotation:number;warnings:string[];curve?:Point[];diagnostics?:AngularDiagnostics};
 export type BurnRecord={kind:'dvd-art-calibration';version:1;id:string;created:string;pattern:Pattern;geometry:Geometry;media:string;burner:string;speed:string;exportedAt?:string;radii:string[];points:Point[];fitPitch:boolean;triangleEdge?:TriangleEdge;baselineId?:string;parentId?:string;readCompatibility?:ReadCompatibility;strata?:StrataSettings;sweep?:SweepMeasurements};
-export type Profile={kind:'dvd-art-profile';version:1;id:string;name:string;created:string;geometry:Geometry;media:string;burner:string;speed:string;stage:Pattern;rms?:number;angularRmsDegrees?:number;readCompatibility?:ReadCompatibility;record:BurnRecord;diagnostics?:AngularDiagnostics};
+export type Profile={kind:'dvd-art-profile';version:1;id:string;name:string;created:string;geometry:Geometry;media:string;burner:string;speed:string;stage:Pattern;fitMethod?:'verification-edges-v1';rms?:number;angularRmsDegrees?:number;readCompatibility?:ReadCompatibility;record:BurnRecord;diagnostics?:AngularDiagnostics};
 export type CalibrationStore={records:BurnRecord[];profiles:Profile[]};
 export const storageKey='dvd-art-calibration-v1';
 export const edgeLabels=['Band 1 · inner edge','Band 1 · outer edge','Band 2 · inner edge','Band 2 · outer edge','Band 3 · inner edge','Band 3 · outer edge'];
@@ -34,7 +34,19 @@ export function validateRecord(v:unknown):v is BurnRecord{
 }
 export function validateProfile(v:unknown):v is Profile{
  if(!v||typeof v!=='object')return false;const p=v as Profile;
- return p.kind==='dvd-art-profile'&&p.version===1&&string(p.id)&&string(p.name)&&string(p.created)&&string(p.media)&&string(p.burner)&&string(p.speed)&&validGeometry(p.geometry)&&(p.stage==='bands'||p.stage==='line'||p.stage==='triangles-v1'||p.stage==='sweep-v1'||p.stage==='strata-v1')&&validCompatibility(p.readCompatibility)&&(p.stage!=='strata-v1'||(p.readCompatibility==='write-safe-light-v1'&&p.record?.pattern==='strata-v1'&&(p.record.strata?.halfRangePPM??0)>0))&&(p.stage==='sweep-v1'?typeof p.angularRmsDegrees==='number'&&Number.isFinite(p.angularRmsDegrees)&&p.angularRmsDegrees>=0:typeof p.rms==='number'&&Number.isFinite(p.rms)&&p.rms>=0)&&validateRecord(p.record)&&(p.diagnostics===undefined||validDiagnostics(p.diagnostics));
+ const boundaryFit=p.fitMethod==='verification-edges-v1';
+ const validBoundaryFit=p.stage==='strata-v1'&&p.record?.pattern==='strata-v1'&&p.record.strata?.halfRangePPM===0&&p.record.fitPitch===true&&Array.isArray(p.record.points)&&p.record.points.length>=24&&validDiagnostics(p.diagnostics);
+ return p.kind==='dvd-art-profile'&&p.version===1&&string(p.id)&&string(p.name)&&string(p.created)&&string(p.media)&&string(p.burner)&&string(p.speed)&&validGeometry(p.geometry)&&(p.stage==='bands'||p.stage==='line'||p.stage==='triangles-v1'||p.stage==='sweep-v1'||p.stage==='strata-v1')&&validCompatibility(p.readCompatibility)&&(p.fitMethod===undefined||boundaryFit&&validBoundaryFit)&&(p.stage!=='strata-v1'||(p.readCompatibility==='write-safe-light-v1'&&p.record?.pattern==='strata-v1'&&((p.record.strata?.halfRangePPM??0)>0||boundaryFit&&validBoundaryFit)))&&(p.stage==='sweep-v1'?typeof p.angularRmsDegrees==='number'&&Number.isFinite(p.angularRmsDegrees)&&p.angularRmsDegrees>=0:typeof p.rms==='number'&&Number.isFinite(p.rms)&&p.rms>=0)&&validateRecord(p.record)&&(p.diagnostics===undefined||validDiagnostics(p.diagnostics));
+}
+
+// Follow-up burns inherit the fitted geometry, never the source measurements.
+export function strataFollowup(profile:Profile,halfRangePPM:number,id:string,created:string):BurnRecord{
+ if(!validateProfile(profile)||profile.stage!=='strata-v1')throw Error('Choose a valid four-stratum profile.');
+ const geometry={...profile.geometry,outputSectors:0};
+ const record:BurnRecord={...structuredClone(profile.record),id,created,geometry,parentId:profile.record.id,baselineId:profile.id,strata:emptyStrata(halfRangePPM),readCompatibility:'write-safe-light-v1',radii:Array(6).fill(''),points:[],fitPitch:false};
+ delete record.exportedAt;
+ if(!validateRecord(record))throw Error('Invalid four-stratum follow-up settings.');
+ return record;
 }
 
 export function validDiagnostics(v:unknown):v is AngularDiagnostics{
